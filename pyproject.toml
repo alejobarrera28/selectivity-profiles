@@ -1,0 +1,19 @@
+[project]
+name = "selectivity-profiles"
+version = "0.1.0"
+requires-python = ">=3.12"
+dependencies = [
+    "brainwidemap",
+    "ibl-ai-agent",
+    "matplotlib>=3.11.2",
+    "numpy>=2.5.3",
+    "pandas>=3.0.6",
+    "pyarrow>=26.0.0",
+    "scikit-learn>=1.9.1",
+    "scipy>=1.18.1",
+    "torch>=2.14.1",
+]
+
+[tool.uv.sources]
+brainwidemap = { git = "https://github.com/int-brain-lab/paper-brain-wide-map.git", rev = "de37454426bc4107047b5a18b854fc1ef7a5959c" }
+ibl-ai-agent = { path = "../ibl-ai-agent", editable = true }
