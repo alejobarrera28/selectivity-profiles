@@ -14,7 +14,7 @@ encoding model fitted to every neuron.
 
 1. Build sessions: select trials and neurons, bin spikes and behaviour. Done.
 2. Preprocessing: smooth and z-score the spikes, encode the task variables,
-   shift and z-score the movement traces. To do.
+   shift and z-score the movement traces. Done.
 3. Fit the RRR model (one model for all sessions, shared temporal bases). To do.
 4. Export the fitted coefficients per neuron, with the goodness of fit. To do.
 5. Fig. 2c: per-area mean absolute selectivity, z-scored across areas. To do.
@@ -26,6 +26,7 @@ datasets downloaded. Python and packages are managed with `uv`:
 
     uv sync                                   # create the environment (once)
     uv run python step1_build_sessions.py     # step 1, about 2.5 minutes
+    uv run python step2_preprocess.py         # step 2, about 30 seconds
 
 `pyproject.toml` was created with these commands (`uv.lock` and `.venv/` are
 generated from it automatically):
@@ -40,9 +41,11 @@ generated from it automatically):
 
 ## Files
 
-- `step1_build_sessions.py`: step 1.
+- `step1_build_sessions.py`, `step2_preprocess.py`: steps 1 and 2.
 - `data/`: the two lists copied from the authors (see Inputs).
 - `outputs/sessions/`: one file per session, made by step 1, used by step 2.
+- `outputs/preprocessed/`: one file per session, made by step 2, used by step 3
+  (2.8 GB).
 - `outputs/checks/`: plots and tables for checking each step.
 
 ## Inputs
@@ -111,6 +114,81 @@ trial and neuron selection line by line from their code (their binning,
 cropping and tests) in a throwaway script. It gave the same 535 trials and the
 same 48 neurons as our functions.
 
+## Step 2: preprocessing
+
+`step2_preprocess.py` turns each session from step 1 into what the model is
+fitted on:
+
+- Targets, y (`prepare_targets`), as in the paper's Methods ("Target
+  variables", eq. 1): spike counts smoothed in time with a Gaussian (s.d.
+  20 ms), then z-scored per neuron and time bin across trials. Smoothing turns
+  noisy 0/1 spike counts into an estimate of the firing rate. Z-scoring puts
+  every neuron and time bin on the same scale, so the fit weighs them equally
+  and coefficients can be compared across neurons. Because the mean across
+  trials is removed at every time bin, y only contains how each trial differs
+  from the average trial; that is what the model explains.
+- Inputs, X (`prepare_inputs`): the 8 variables at every trial and time bin.
+  - Task variables, constant within a trial, encoded as in the paper's Methods
+    ("Input variables"): block (+1 = left block, p(left) = 0.8), side (+1 =
+    stimulus on the left), contrast (0 for 0%, 1 for low contrast up to 12.5%,
+    4 for high), choice (+1 = clockwise), outcome (+1 = reward). The authors'
+    code computes the outcome as "stimulus side matches the choice"; we take
+    IBL's feedbackType, which is identical in all 60,528 trials.
+  - Movement variables (wheel, whisker, lick): neurons and movements are not
+    perfectly in sync, so each trace is shifted in time to where it lines up
+    best with the session's neurons; one shift per variable and session. The
+    paper's Methods only give the idea ("shifted the movement traces so that
+    the zero-lagged correlation was maximized", "averaged across neurons and
+    trials"). The details come from the authors' code (`find_bestdelay_byCC`,
+    lines 227-247, and `_preprocess_movement`, line 89, in
+    `utils/save_and_load_data.py`), and we copy them:
+    - the shift ranges over +-100 ms, which is what their -0.3 to 0.9 s
+      behaviour window allows;
+    - the measure is a cross-correlation (their "CC"): for each shift, each
+      neuron's dot product with the shifted trace (after removing each trial's
+      mean, summed over time, averaged over trials), with the neurons combined
+      as the square root of the sum of squares. It is not normalized (values
+      are not between -1 and 1), and the neurons are not plainly averaged as
+      the Methods' wording suggests: with a plain average, neurons with
+      opposite signs would cancel;
+    - if the best shift is at the edge of the range (+-100 ms), the search
+      counts as failed and the trace is used unshifted.
+  - Every variable is then z-scored per time bin across trials, as in the
+    paper's Methods (so the coefficients are comparable across variables, and
+    the ridge penalty treats them equally). The authors' code also z-scores
+    each movement trace over all bins first; the per-bin z-score undoes that,
+    so we skip it.
+  - A column of ones is added so the model can fit a baseline per neuron and
+    time bin (authors' code; their `RRR_b`).
+
+Each session is saved to `outputs/preprocessed/<eid>.npz`:
+
+- `X`: (trials, 100 bins, 9): the 8 variables in Fig. 2 order (block, side,
+  contrast, choice, outcome, wheel, whisker, lick), then the ones.
+- `y`: (trials, 100 bins, neurons).
+- `y_mean`, `y_std`: (100 bins, neurons), to turn predictions back into
+  (smoothed) spike counts.
+- `variables`, `area`, `pid`, `cluster_id`: names of X's columns and the
+  neuron table, as in step 1.
+
+Results: all 170 sessions are preprocessed, in about 30 seconds. The chosen
+shifts are in `outputs/checks/step2_summary.csv` and
+`outputs/checks/step2_check.png`. They make sense: neurons tend to fire before
+the wheel moves (median +50 ms, motor commands) and after the whiskers move
+(median -30 ms, sensing the movement). The shift search fails in 37 sessions
+for the wheel, 27 for whisker and 19 for lick, and these failures continue the
+same trends: almost all wheel failures want more than +100 ms, all whisker
+failures less than -100 ms. So the +-100 ms range the authors' code allows is
+too narrow for some sessions. We keep it and the failure rule, to match them;
+neither is mentioned in the paper. Widening the range (it needs a wider
+behaviour window in step 1) is a possible sensitivity test once the figure
+works.
+
+How it was checked: on 5 sessions, we computed X and y with the authors' code
+(their actual `find_bestdelay_byCC`, and the rest of `_read_Xy` rewritten line
+by line) and compared. y is identical, X differs by at most 3e-7 (rounding),
+and every chosen shift is the same.
+
 ## Differences from the authors
 
 - Neurons: we only have "good units" (IBL's best-quality neurons), while the
@@ -166,3 +244,7 @@ the authors' code. In their repo (commit 00d40b9), the code is here:
   `get_tongue` in `utils/download_data.py`. The wheel filter and the lick
   detector are IBL's (`brainbox.behavior.wheel.velocity_filtered`,
   `brainbox.behavior.dlc.get_licks`).
+- Step 2 (smoothing, z-scoring, task variable encoding, intercept): `_read_Xy`
+  in `utils/save_and_load_data.py`. Movement shifts: `find_bestdelay_byCC`
+  (lines 227-247, including the failure rule at 242-246) and
+  `_preprocess_movement` (line 89: failed search -> unshifted) in the same file.
