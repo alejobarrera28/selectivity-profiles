@@ -15,7 +15,7 @@ encoding model fitted to every neuron.
 1. Build sessions: select trials and neurons, bin spikes and behaviour. Done.
 2. Preprocessing: smooth and z-score the spikes, encode the task variables,
    shift and z-score the movement traces. Done.
-3. Fit the RRR model (one model for all sessions, shared temporal bases). To do.
+3. Fit the RRR model (one model for all sessions, shared temporal bases). Done.
 4. Export the fitted coefficients per neuron, with the goodness of fit. To do.
 5. Fig. 2c: per-area mean absolute selectivity, z-scored across areas. To do.
 
@@ -27,6 +27,11 @@ datasets downloaded. Python and packages are managed with `uv`:
     uv sync                                   # create the environment (once)
     uv run python step1_build_sessions.py     # step 1, about 2.5 minutes
     uv run python step2_preprocess.py         # step 2, about 30 seconds
+    caffeinate -i uv run python step3_fit_rrr.py   # step 3, about 1 hour
+
+`caffeinate -i` keeps the Mac awake during the long run. Step 3 saves each fit
+as soon as it is done, so if it stops, running it again resumes where it left
+off (delete `outputs/rrr/` to start over).
 
 `pyproject.toml` was created with these commands (`uv.lock` and `.venv/` are
 generated from it automatically):
@@ -35,17 +40,20 @@ generated from it automatically):
     uv add "brainwidemap @ git+https://github.com/int-brain-lab/paper-brain-wide-map.git@de37454"
     uv add --editable ../ibl-ai-agent
     uv add numpy pandas pyarrow scipy matplotlib scikit-learn torch
+    uv add tqdm
 
 `ibl-ai-agent` is only used to read the agent's compressed data files.
 `brainwidemap` is needed because the agent depends on it, and it is only on GitHub.
 
 ## Files
 
-- `step1_build_sessions.py`, `step2_preprocess.py`: steps 1 and 2.
+- `step1_build_sessions.py`, `step2_preprocess.py`, `step3_fit_rrr.py`: steps 1-3.
 - `data/`: the two lists copied from the authors (see Inputs).
 - `outputs/sessions/`: one file per session, made by step 1, used by step 2.
 - `outputs/preprocessed/`: one file per session, made by step 2, used by step 3
   (2.8 GB).
+- `outputs/rrr/`: the fitted model and the per-neuron test R², made by step 3,
+  used by step 4.
 - `outputs/checks/`: plots and tables for checking each step.
 
 ## Inputs
@@ -99,6 +107,8 @@ Each session is saved to `outputs/sessions/<eid>.npz`, with raw values only:
   wheel turn and -1 counter-clockwise; feedbackType +1 is a reward.
 - `area`, `pid`, `cluster_id`: one value per neuron (Beryl area acronym,
   probe id, IBL cluster id).
+- `dt`, `neural_start`: the time axis (0.01 s bins, starting 0.2 s before the
+  stimulus). Later steps read it from here instead of redefining it.
 
 Results: 170 of the 172 sessions pass (2 have fewer than 100 trials), with
 60,528 trials and 19,728 neurons, of which 4,233 are in cortex. The per-session
@@ -158,18 +168,16 @@ fitted on:
     the ridge penalty treats them equally). The authors' code also z-scores
     each movement trace over all bins first; the per-bin z-score undoes that,
     so we skip it.
-  - A column of ones is added so the model can fit a baseline per neuron and
-    time bin (authors' code; their `RRR_b`).
 
 Each session is saved to `outputs/preprocessed/<eid>.npz`:
 
-- `X`: (trials, 100 bins, 9): the 8 variables in Fig. 2 order (block, side,
-  contrast, choice, outcome, wheel, whisker, lick), then the ones.
+- `X`: (trials, 100 bins, 8): the 8 variables in Fig. 2 order (block, side,
+  contrast, choice, outcome, wheel, whisker, lick).
 - `y`: (trials, 100 bins, neurons).
 - `y_mean`, `y_std`: (100 bins, neurons), to turn predictions back into
   (smoothed) spike counts.
-- `variables`, `area`, `pid`, `cluster_id`: names of X's columns and the
-  neuron table, as in step 1.
+- `variables`, `area`, `pid`, `cluster_id`, `dt`, `neural_start`: names of
+  X's columns, the neuron table and the time axis, passed on from step 1.
 
 Results: all 170 sessions are preprocessed, in about 30 seconds. The chosen
 shifts are in `outputs/checks/step2_summary.csv` and
@@ -180,14 +188,108 @@ for the wheel, 27 for whisker and 19 for lick, and these failures continue the
 same trends: almost all wheel failures want more than +100 ms, all whisker
 failures less than -100 ms. So the +-100 ms range the authors' code allows is
 too narrow for some sessions. We keep it and the failure rule, to match them;
-neither is mentioned in the paper. Widening the range (it needs a wider
-behaviour window in step 1) is a possible sensitivity test once the figure
-works.
+neither is mentioned in the paper (see Limitations of the method).
 
 How it was checked: on 5 sessions, we computed X and y with the authors' code
 (their actual `find_bestdelay_byCC`, and the rest of `_read_Xy` rewritten line
 by line) and compared. y is identical, X differs by at most 3e-7 (rounding),
 and every chosen shift is the same.
+
+## Step 3: fitting the RRR model
+
+`step3_fit_rrr.py` fits the paper's encoding model to all neurons of all
+sessions at once.
+
+- The model (`RRR`; paper Methods, eq. 2-3): each neuron's z-scored activity
+  is a linear combination of the 8 variables, with time-varying coefficients,
+  plus a baseline per neuron and time bin:
+  `y_hat[n](k, t) = sum_v beta[n, v](t) * x[v](k, t) + b[n](t)`. Every
+  coefficient's time course is a mix of a few time shapes shared by all
+  neurons and sessions: `beta[n, v](t) = sum_i U[n, v, i] * V[i](t)`. This
+  reduced rank is what makes the fit possible with few trials: 8 x 5 = 40
+  numbers per neuron instead of 8 x 100, and every neuron helps estimate V.
+  This is why all brain areas are fitted, not only cortex.
+- The fit (`fit`; paper Methods, eq. 7): minimize the squared prediction error
+  plus a ridge penalty, lambda times the sum of all beta² (the baseline is not
+  penalized), with L-BFGS and the authors' settings, over all sessions together.
+- No hyperparameter search: we fix d = 5 shapes (the paper's best) and lambda =
+  75 (see Differences).
+- It is fitted twice over:
+  - 3 times on 70% of each session's trials, measuring each neuron's R² on the
+    other 30%, trials the model never saw (`test_r2`). Averaged over the 3
+    splits, this is the honest goodness of fit that step 4 uses to keep the
+    well-fit neurons (paper Methods: "We repeated the whole
+    split-train-test process three times"). The test fraction is 0.3 as in
+    the authors' code; the paper says one-third.
+  - once on all trials. Its coefficients are what Fig. 2c summarizes.
+- The splits are stratified by block x contrast, so every combination is in
+  both parts (paper Methods); if a session has too few trials of some
+  combination, by block only, then not at all (authors' code). The paper
+  doesn't say why only these two variables. Our reading: they are set by the
+  experimenter rather than by the mouse's behaviour, they are the ones most
+  likely to be unbalanced by chance (blocks come in long runs; 0% contrast is
+  ~10% of trials), and adding more variables would leave too few trials per
+  combination to split.
+- R² is computed on spike counts: the data and the predictions are
+  un-z-scored first (authors' code). The two versions differ. Per neuron,
+  with s(t) and m(t) the std and mean across trials at time bin t, the errors
+  in counts are the z-scored errors weighted by s(t)², and the total variation
+  in counts is K * sum_t s(t)² (trial-to-trial) + K * sum_t (m(t) - mean)² (the
+  average response over time). So on spike counts the average response also
+  counts as explained, and R² is higher than on z-scored data. We use spike
+  counts because the paper's goodness of fit and its threshold on R² minus the
+  average-response model's R² (step 4) are defined on firing rates.
+
+Output, in `outputs/rrr/`:
+
+- `split0.npz`, `split1.npz`, `split2.npz`: for each session id, one test R²
+  per neuron (same order as in step 2's files); `losses`, the fit's loss after
+  every evaluation.
+- `all_trials.npz`: the final model. `V` (5 shapes x 100 bins); for each
+  session `U_<eid>` (neurons x 8 variables x 5) and `b_<eid>` (neurons x 100
+  bins); `losses`. The coefficients are beta = U @ V.
+
+Results: about 1 hour on a 16 GB M3 laptop. Every fit converged long before
+the 1000-iteration limit (205 to 358 evaluations). The 5 learned shapes
+(`outputs/checks/step3_check.png`) are smooth and follow the task's timeline:
+flat before the stimulus, with features around the stimulus response
+(~0.1 s), the movement (~0.2-0.3 s) and after the response (~0.4 s and
+later). Individual shapes are not unique (other sets of 5 give the same
+coefficients), so only the coefficients are interpreted. The per-neuron test R²
+has a median of 0.049 and a long tail up to ~0.7; it includes the part the
+average response explains, which step 4 subtracts.
+
+How it was checked: a first fit on all trials, inspected before the full run
+(loss converging, smooth shapes); a test run of the whole script on 3 sessions
+with 10 iterations, including the saving and the resume. The model, the loss
+and the way initial values are drawn are the authors' (`RRRGD_model`); the
+random initial values themselves differ, which doesn't matter once the fit
+has converged.
+
+## Limitations of the method
+
+These come from the authors' method, which we copy on purpose. They are
+open questions, not differences from the authors.
+
+- The model is instantaneous: a neuron's activity at time t is explained by
+  the variables at the same time t. A neuron that fires 50 ms before the wheel
+  moves is only captured because the wheel trace is shifted first (step 2).
+  The paper acknowledges that their model, unlike GLMs, can't use inputs from
+  neighbouring time steps, and says it "could be incorporated in future
+  extensions" (Methods, "Comparison to previous regression models").
+- One shift per movement and session, shared by all of the session's neurons.
+  A session usually mixes neurons that lead a movement (motor-like) and
+  neurons that lag it (sensory-like). The shift is computed from all neurons
+  together, so it goes to whichever group contributes more, or lands between
+  them. The other neurons get a slightly mistimed trace and their selectivity
+  to that movement is underestimated (weakened, not lost: movements last a few
+  hundred ms and the spikes are smoothed). A probe crosses several areas, so
+  this can bias the comparison between areas. The paper doesn't discuss it.
+  Possible test: compute a best shift per neuron and see how much they spread
+  within a session.
+- The shift range is +-100 ms, and many sessions want more (see step 2
+  results). Possible test: widen the range (needs a wider behaviour window in
+  step 1) and see whether Fig. 2c changes.
 
 ## Differences from the authors
 
@@ -210,6 +312,14 @@ and every chosen shift is the same.
 - Wheel velocity: the authors filter the wheel position trial by trial; we
   filter the whole session at once with the same filter, which avoids edge
   effects at the start and end of each trial. Small difference.
+- No hyperparameter search: the authors choose d (number of time shapes) from
+  3-6 and lambda (ridge penalty) from 25, 75 and 200 by cross-validation. We
+  fix d = 5, the best value reported in the paper, and lambda = 75, the middle
+  of their grid (the paper doesn't report which lambda won). lambda shrinks all
+  coefficients; Fig. 2c z-scores each variable across areas, so a shrinkage
+  that affects all areas alike mostly cancels out, but it can change which
+  neurons pass step 4's threshold. Testing 25 and 200 is a possible
+  sensitivity check.
 
 ## What to compare our results against
 
@@ -244,7 +354,23 @@ the authors' code. In their repo (commit 00d40b9), the code is here:
   `get_tongue` in `utils/download_data.py`. The wheel filter and the lick
   detector are IBL's (`brainbox.behavior.wheel.velocity_filtered`,
   `brainbox.behavior.dlc.get_licks`).
-- Step 2 (smoothing, z-scoring, task variable encoding, intercept): `_read_Xy`
-  in `utils/save_and_load_data.py`. Movement shifts: `find_bestdelay_byCC`
+- Step 2 (smoothing, z-scoring, task variable encoding): `_read_Xy` in
+  `utils/save_and_load_data.py`. Movement shifts: `find_bestdelay_byCC`
   (lines 227-247, including the failure rule at 242-246) and
   `_preprocess_movement` (line 89: failed search -> unshifted) in the same file.
+  `_read_Xy` also appends a column of ones to X, so that their model's
+  baseline (`RRR_b`) is the coefficient of that column. We don't: our model
+  adds the baseline explicitly. Same model, same results.
+- Step 3: the model, its initial values, the loss and the ridge penalty are
+  `RRRGD_model` in `utils/RRRGD.py`. The L-BFGS fit and the cross-validation
+  (70/30 splits, seeds 42 + split, R² on held-out trials) are
+  `train_model_hyper_selection` in `utils/RRRGD_main_CV.py`, called with the
+  grid and the stratification order (block x contrast, block, none) from
+  `step2_train_RRR.py`. R² per neuron, un-z-scored and clipped at 0:
+  `compute_R2_RRRGD` in `utils/RRRGD.py` and `compute_R2_main` in
+  `utils/utils.py`. Their fit sums all sessions' losses and computes the
+  gradient once; we compute it session by session and add the gradients
+  (gradient accumulation), so that the fit fits in 16 GB of memory. Same
+  gradients, same fit. After choosing the hyperparameters they refit the 3
+  splits under new file names; with fixed hyperparameters we need each split
+  only once.

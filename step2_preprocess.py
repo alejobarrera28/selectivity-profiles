@@ -3,8 +3,7 @@
 For each session saved by step 1, two functions build what the RRR model is
 fitted on:
   prepare_targets -> y: smoothed spike counts, z-scored per neuron and time bin
-  prepare_inputs  -> X: the 8 variables, z-scored per variable and time bin,
-                     plus a column of ones for the intercept
+  prepare_inputs  -> X: the 8 variables, z-scored per variable and time bin
 
 Output: one file per session in outputs/preprocessed/, plus a check plot and a
 per-session summary in outputs/checks/.
@@ -22,9 +21,6 @@ SESSIONS_DIR = "outputs/sessions"  # step 1's output
 # ---- Outputs
 PREPROCESSED_DIR = "outputs/preprocessed"  # one .npz per session (used by step 3)
 CHECKS_DIR = "outputs/checks"              # check plot and per-session summary
-
-# ---- Time axis
-DT = 0.01  # seconds per bin, as in step 1
 
 # ---- Z-scoring (y and X)
 STD_FLOOR = 1e-8  # authors' code: avoids dividing by 0 when a value never varies across trials
@@ -118,16 +114,15 @@ def _best_shift(trace, spikes):
 
 
 def prepare_inputs(session, spikes):
-    """X: the 8 variables at every trial and time bin, z-scored, plus a column of ones.
+    """X: the 8 variables at every trial and time bin, z-scored.
 
     Task variables are constant within a trial. Movement traces are shifted by
     their best shift (_best_shift) and cut to the neural time bins. Every
     variable is then z-scored per time bin, so that the coefficients are
-    comparable across variables (paper Methods). The column of ones lets the
-    model fit an intercept, a per-neuron baseline over time (authors' code).
-    Returns X (trials, bins, 9) and, per movement, its shift and cross-correlation curve.
+    comparable across variables (paper Methods).
+    Returns X (trials, bins, 8) and, per movement, its shift and cross-correlation curve.
     """
-    n_trials, n_bins, _ = spikes.shape
+    n_bins = spikes.shape[1]
     columns = {name: np.repeat(values[:, None], n_bins, axis=1)
                for name, values in _task_variables(session).items()}
     shifts = {}
@@ -139,12 +134,12 @@ def prepare_inputs(session, spikes):
         shifts[name] = (shift, cross_corr)
     x = np.stack([columns[name] for name in VARIABLES], axis=2).astype(float)
     x, _, _ = _zscore_over_trials(x)
-    return np.concatenate([x, np.ones((n_trials, n_bins, 1))], axis=2), shifts
+    return x, shifts
 
 
 # ================================================================ check
 
-def plot_check(first_shifts, summary, path):
+def plot_check(first_shifts, summary, dt, path):
     """Top: for one session, how well each shift lines up each movement with the neurons.
     Bottom: the shift chosen for each movement across all sessions.
     """
@@ -152,12 +147,12 @@ def plot_check(first_shifts, summary, path):
     for j, name in enumerate(MOVEMENTS):
         shift, cross_corr = first_shifts[name]
         max_shift = (len(cross_corr) - 1) // 2
-        shifts_ms = np.arange(-max_shift, max_shift + 1) * DT * 1000
+        shifts_ms = np.arange(-max_shift, max_shift + 1) * dt * 1000
         axes[0, j].plot(shifts_ms, cross_corr, marker=".")
-        axes[0, j].axvline(shift * DT * 1000, color="r", lw=1, label="chosen")
+        axes[0, j].axvline(shift * dt * 1000, color="r", lw=1, label="chosen")
         axes[0, j].set(title=f"{name} (first session)", xlabel="shift (ms)",
                        ylabel="cross-correlation with neurons")
-        axes[1, j].hist(summary[f"{name}_shift_ms"], bins=shifts_ms - DT * 500)
+        axes[1, j].hist(summary[f"{name}_shift_ms"], bins=shifts_ms - dt * 500)
         axes[1, j].set(title=f"{name} (all sessions)", xlabel="chosen shift (ms)",
                        ylabel="sessions")
     axes[0, 0].legend(fontsize=7)
@@ -181,6 +176,7 @@ if __name__ == "__main__":
         # ---- Read step 1's file
         session = np.load(path)
         spikes = session["spikes"]
+        dt = float(session["dt"])  # seconds per time bin, set in step 1
 
         # ---- Targets
         y, y_mean, y_std = prepare_targets(spikes)
@@ -191,14 +187,15 @@ if __name__ == "__main__":
         # ---- Save (not compressed: z-scored decimals barely compress)
         np.savez(
             f"{PREPROCESSED_DIR}/{path.stem}.npz",
-            X=x.astype(np.float32),                 # (trials, 100 bins, 8 variables + ones)
+            X=x.astype(np.float32),                 # (trials, 100 bins, 8 variables)
             y=y.astype(np.float32),                 # (trials, 100 bins, neurons)
             y_mean=y_mean.astype(np.float32),       # (100 bins, neurons), to undo the z-score
             y_std=y_std.astype(np.float32),
-            variables=np.array(VARIABLES),          # names of X's first 8 columns
+            variables=np.array(VARIABLES),          # names of X's 8 columns
             area=session["area"], pid=session["pid"], cluster_id=session["cluster_id"],
+            dt=session["dt"], neural_start=session["neural_start"],  # time axis, passed on from step 1
         )
-        shift_ms = {f"{name}_shift_ms": round(shifts[name][0] * DT * 1000) for name in MOVEMENTS}
+        shift_ms = {f"{name}_shift_ms": round(shifts[name][0] * dt * 1000) for name in MOVEMENTS}
         # A failed search (best shift at the edge of the range) also gives 0 ms.
         failed = {f"{name}_search_failed":
                   np.argmax(shifts[name][1]) in (0, len(shifts[name][1]) - 1)
@@ -215,6 +212,6 @@ if __name__ == "__main__":
     # 3. Summary of the whole step, also saved as a table, and the check plot.
     summary = pd.DataFrame(summary)
     summary.to_csv(f"{CHECKS_DIR}/step2_summary.csv", index=False)
-    plot_check(first_shifts, summary, f"{CHECKS_DIR}/step2_check.png")
+    plot_check(first_shifts, summary, dt, f"{CHECKS_DIR}/step2_check.png")
     print(f"\nPreprocessed {len(summary)} sessions. Failed shift searches (no shift used): "
           + ", ".join(f"{name} {summary[f'{name}_search_failed'].sum()}" for name in MOVEMENTS))

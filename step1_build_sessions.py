@@ -325,6 +325,7 @@ if __name__ == "__main__":
             area=units.beryl_acronym.to_numpy(str),         # one entry per neuron
             pid=units.pid.to_numpy(str),
             cluster_id=units.cluster_id.to_numpy(),
+            dt=DT, neural_start=NEURAL_START,               # time axis, so later steps read it from here
         )
         n_cortex = units.beryl_acronym.isin(CORTICAL_AREAS).sum()
         print(f"{i + 1:3d}/{len(eids)} {eid}: {len(trials)} trials, "
