@@ -53,6 +53,8 @@ class RRR(torch.nn.Module):
         y_hat[n](k, t) = sum_v beta[n, v](t) * x[v](k, t) + b[n](t)
     V (rank x time bins) is shared by all neurons and sessions; each session
     has its own U (neurons x variables x rank) and b (neurons x time bins).
+    Since X and y are z-scored, beta[n, v](t) reads: at time t, when variable v
+    is 1 std above usual, neuron n's activity is beta std above usual.
     """
 
     def __init__(self, sessions, rank):

@@ -17,7 +17,7 @@ encoding model fitted to every neuron.
    shift and z-score the movement traces. Done.
 3. Fit the RRR model (one model for all sessions, shared temporal bases). Done.
 4. Goodness of fit per neuron (delta R²) and selection of the selective ones. Done.
-5. Fig. 2c: per-area mean absolute selectivity, z-scored across areas. To do.
+5. Fig. 2c: per-area mean absolute selectivity, z-scored across areas. Done.
 
 ## Running it
 
@@ -29,6 +29,7 @@ datasets downloaded. Python and packages are managed with `uv`:
     uv run python step2_preprocess.py         # step 2, about 30 seconds
     caffeinate -i uv run python step3_fit_rrr.py   # step 3, about 1 hour
     uv run python step4_select_neurons.py     # step 4, about 15 seconds
+    uv run python step5_fig2c.py              # step 5, a few seconds
 
 `caffeinate -i` keeps the Mac awake during the long run. Step 3 saves each fit
 as soon as it is done, so if it stops, running it again resumes where it left
@@ -49,7 +50,7 @@ generated from it automatically):
 ## Files
 
 - `step1_build_sessions.py`, `step2_preprocess.py`, `step3_fit_rrr.py`,
-  `step4_select_neurons.py`: steps 1-4.
+  `step4_select_neurons.py`, `step5_fig2c.py`: steps 1-5.
 - `data/`: the two lists copied from the authors (see Inputs).
 - `outputs/sessions/`: one file per session, made by step 1, used by step 2.
 - `outputs/preprocessed/`: one file per session, made by step 2, used by step 3
@@ -58,6 +59,7 @@ generated from it automatically):
   used by step 4.
 - `outputs/neurons/`: one row per neuron (R², delta R², selected) and its
   coefficients, made by step 4, used by step 5.
+- `outputs/figures/`: Fig. 2c and its values, made by step 5.
 - `outputs/checks/`: plots and tables for checking each step.
 
 ## Inputs
@@ -207,7 +209,9 @@ sessions at once.
 - The model (`RRR`; paper Methods, eq. 2-3): each neuron's z-scored activity
   is a linear combination of the 8 variables, with time-varying coefficients,
   plus a baseline per neuron and time bin:
-  `y_hat[n](k, t) = sum_v beta[n, v](t) * x[v](k, t) + b[n](t)`. Every
+  `y_hat[n](k, t) = sum_v beta[n, v](t) * x[v](k, t) + b[n](t)`. Since X and
+  y are z-scored, a coefficient reads: at time t, when variable v is 1 std
+  above usual, neuron n's activity is beta[n, v](t) std above usual. Every
   coefficient's time course is a mix of a few time shapes shared by all
   neurons and sessions: `beta[n, v](t) = sum_i U[n, v, i] * V[i](t)`. This
   reduced rank is what makes the fit possible with few trials: 8 x 5 = 40
@@ -305,6 +309,47 @@ worse than the average does, i.e. they have no real selectivity.
 How it was checked: the null model and the selection follow the authors'
 `trial_avg_r2` and `Fig2c.py`; the splits and R² are step 3's own functions.
 
+## Step 5: Fig. 2c
+
+`step5_fig2c.py` makes the figure, as the authors' `Fig2c.py` does.
+
+- Selectivity of each neuron to each variable (paper Methods, "Computing the
+  selectivity profiles"): alpha = sum over the 100 time bins of |beta(t)|,
+  the total modulation over the trial. The absolute value makes effects of
+  opposite sign (or in opposite directions at different times) add up instead
+  of cancelling, and makes the arbitrary sign coding of the variables
+  irrelevant: alpha measures how strongly a neuron is modulated, not in which
+  direction.
+- Neurons: the selected ones (step 4) in the 43 cortical areas. Areas: those
+  with at least 30 such neurons (authors' `Fig2c.py`).
+- Each area's alpha is averaged over its neurons and z-scored across areas,
+  separately for each variable. Variables differ in how strongly they
+  modulate neurons overall (whisking modulates nearly everything more than the
+  block does); z-scoring per variable removes that, so each column shows which
+  areas stand out for that variable. Colours compare areas within a column,
+  not variables, and depend on which areas are shown.
+- Areas are ordered as in the authors' code: grouped by family
+  (somatosensory, visual, auditory and gustatory, retrosplenial, insular,
+  others), each in hierarchy order, then reversed. The 3 most selective areas
+  of each variable are marked with triangles, as in the published figure (the
+  authors' code uses "*").
+
+Output, in `outputs/figures/`: `fig2c.png`, and `fig2c_values.csv` with the
+z-scored values and each area's number of selected neurons.
+
+Results: 16 areas, from 1,403 selected cortical neurons. With 16 of the
+paper's 31 areas, the fair comparison is the paper's top-3 markers that fall
+on areas we have: 10 of those 14 are reproduced. Side (MOs, ACAd), choice
+(MOs, ACAd), outcome (AId, AUDp), wheel (PL, SSs) and lick (AUDp) match
+fully; block matches 1 of 3 (RSPd; ACAd and RSPv come just below); whisker
+matches 0 of 2 (SSs and SSp-bfd are high but not top; the frontal ORBvl and
+PL come first); none of the paper's contrast markers are in our areas (VISp
+leads among ours). The overall pattern is the paper's: frontal and motor areas
+lead the cognitive and choice variables, medial and frontal areas the block,
+somatosensory areas and AUDp the licking. Likely causes of the differences:
+fewer neurons per area (noisier averages), good units only, one movement
+shift per session, and lambda not searched.
+
 ## Limitations of the method
 
 These come from the authors' method, which we copy on purpose. They are
@@ -329,6 +374,14 @@ open questions, not differences from the authors.
 - The shift range is +-100 ms, and many sessions want more (see step 2
   results). Possible test: widen the range (needs a wider behaviour window in
   step 1) and see whether Fig. 2c changes.
+- The selectivity alpha = sum over time of |beta(t)| has a noise floor:
+  coefficients estimated from noisy data are never exactly 0, so even a
+  neuron that doesn't care about a variable gets a positive alpha. Z-scoring
+  across areas removes a floor that is the same everywhere, but areas whose
+  coefficients are noisier (fewer trials or noisier neurons) get a higher
+  floor and can look slightly more selective. Possible correction: subtract
+  each area's alpha with the variable shuffled across trials. Neither the
+  paper nor the authors' code does this.
 
 ## Differences from the authors
 
@@ -427,3 +480,6 @@ the authors' code. In their repo (commit 00d40b9), the code is here:
   `utils/analyze_perf_utils.py`, called from `step3_save_trainedRRR_2_df.py`,
   which also builds their per-neuron table (`RRR_r2`, `null_r2`, `RRR_beta`).
   The delta R² > 0.015 selection is in `Fig2_globally_structured_brain/Fig2c.py`.
+- Step 5: `Fig2_globally_structured_brain/Fig2c.py` (cortical neurons with
+  delta R² > 0.015, areas with at least 30, alpha = sum over time of |beta|,
+  area mean, z-score per variable across areas, the area order, top 3 marked).
