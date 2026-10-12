@@ -10,8 +10,8 @@ Tables (.parquet) are read with pandas. Spikes and behaviour traces were stored
 by the IBL agent in its own compressed format, so we read them with the agent's
 two decoders (load_spike_shard, load_behavior_session_shard).
 
-Output: one file per session in outputs/sessions/, plus a check plot and a
-per-session summary in outputs/checks/.
+Output: one file per session in outputs/sessions/, plus a figure and a
+per-session table in outputs/results/.
 """
 from pathlib import Path
 
@@ -30,7 +30,7 @@ BEHAVIOUR = f"{DATA}/bwm_behavior/2.0.0"   # wheel and camera traces
 
 # ---- Outputs
 SESSIONS_DIR = "outputs/sessions"   # one .npz per session (used by step 2)
-CHECKS_DIR = "outputs/checks"       # check plot and per-session summary
+RESULTS_DIR = "outputs/results"     # figure and per-session table (kept in the repo)
 
 # ---- Sessions: the ones the authors trained on
 AUTHORS_EIDS = np.load("data/eid_list.npy", allow_pickle=True).astype(str)
@@ -242,9 +242,9 @@ def prepare_behaviour(shard, stim_times):
     return {"wheel": wheel, "whisker": whisker, "lick": licks}
 
 
-# ================================================================ check
+# ================================================================ figure
 
-def plot_check(trials, spikes, behaviour, path):
+def plot_signals_by_choice(trials, spikes, behaviour, path):
     """Trial-averaged population rate, wheel, whisker and licks, split by choice.
 
     If binning and alignment are right, the wheel turns in opposite directions
@@ -286,10 +286,10 @@ if __name__ == "__main__":
     # 3. For each session: read its files, prepare trials, neurons and behaviour,
     #    and save the result.
     Path(SESSIONS_DIR).mkdir(parents=True, exist_ok=True)
-    Path(CHECKS_DIR).mkdir(parents=True, exist_ok=True)
+    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
     summary = []
     for i, eid in enumerate(eids):
-        first = i == 0  # print the per-rule counts and plot the check for the first session only
+        first = i == 0  # print the per-rule counts and plot the signals for the first session only
 
         # ---- Read this session's files
         session_trials = all_trials[all_trials.eid == eid]
@@ -333,13 +333,14 @@ if __name__ == "__main__":
         summary.append({"eid": eid, "status": "saved", "trials": len(trials),
                         "neurons": len(units), "cortical_neurons": n_cortex})
 
-        # ---- Check (first session only)
+        # ---- Figure (first session only)
         if first:
-            plot_check(trials, spikes, behaviour, f"{CHECKS_DIR}/step1_check.png")
+            plot_signals_by_choice(trials, spikes, behaviour,
+                                   f"{RESULTS_DIR}/step1_signals_by_choice.png")
 
     # 4. Summary of the whole step, also saved as a table.
     summary = pd.DataFrame(summary)
-    summary.to_csv(f"{CHECKS_DIR}/step1_summary.csv", index=False)
+    summary.to_csv(f"{RESULTS_DIR}/step1_sessions.csv", index=False)
     saved = summary[summary.status == "saved"]
     print(f"\nSaved {len(saved)} of {len(eids)} sessions: {saved.trials.sum():.0f} trials, "
           f"{saved.neurons.sum():.0f} neurons ({saved.cortical_neurons.sum():.0f} cortical). "

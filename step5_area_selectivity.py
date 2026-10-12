@@ -1,4 +1,4 @@
-"""Step 5: Fig. 2c, the average selectivity of each cortical area to each variable.
+"""Step 5: the average selectivity of each cortical area to each variable (the paper's Fig. 2c).
 
 For each selected cortical neuron (step 4), its selectivity to each variable is
 alpha = sum over time of |beta(t)| (paper Methods, "Computing the selectivity
@@ -6,7 +6,7 @@ profiles"). Areas with enough selected neurons are kept; alpha is averaged per
 area and z-scored across areas, separately for each variable. Same as the
 authors' Fig2_globally_structured_brain/Fig2c.py.
 
-Output: the figure and its values in outputs/figures/.
+Output: the figure and its values in outputs/results/.
 """
 from pathlib import Path
 
@@ -18,7 +18,7 @@ import pandas as pd
 NEURONS_DIR = "outputs/neurons"  # step 4's output
 
 # ---- Outputs
-FIGURES_DIR = "outputs/figures"
+RESULTS_DIR = "outputs/results"  # figure and its values (kept in the repo)
 
 # ---- Areas
 # The 43 cortical areas, in the paper's hierarchy order (authors' data/area_list.csv).
@@ -63,7 +63,7 @@ def area_selectivity(table, beta):
 
 # ================================================================ figure
 
-def plot_fig2c(zscored, path):
+def plot_area_selectivity(zscored, path):
     """Heatmap of the z-scored mean |selectivity|, with each variable's top areas marked."""
     fig, ax = plt.subplots(figsize=(3.5, 5.6))
     image = ax.imshow(zscored, aspect="auto", cmap="Reds", interpolation="nearest")
@@ -91,10 +91,10 @@ if __name__ == "__main__":
     zscored, counts = area_selectivity(table, beta)
 
     # 3. Save the values and the figure.
-    Path(FIGURES_DIR).mkdir(parents=True, exist_ok=True)
-    zscored.assign(selected_neurons=counts).to_csv(f"{FIGURES_DIR}/fig2c_values.csv")
-    plot_fig2c(zscored, f"{FIGURES_DIR}/fig2c.png")
-    print(f"Fig. 2c: {len(zscored)} areas, {counts.sum()} selected cortical neurons.")
+    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
+    zscored.assign(selected_neurons=counts).to_csv(f"{RESULTS_DIR}/step5_area_selectivity.csv")
+    plot_area_selectivity(zscored, f"{RESULTS_DIR}/step5_area_selectivity.png")
+    print(f"Area selectivity: {len(zscored)} areas, {counts.sum()} selected cortical neurons.")
     for variable in VARIABLES:
         top = zscored[variable].nlargest(N_TOP).index
         print(f"  top {N_TOP} for {variable:8s}: {', '.join(top)}")

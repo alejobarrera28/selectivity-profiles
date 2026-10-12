@@ -1,485 +1,106 @@
-# Replicating Fig. 2c from scratch
+# Selectivity profiles of cortical neurons
 
-Goal: replicate Fig. 2c of Posani, Wang et al., "Rarely categorical, highly
-separable representations along the cortical hierarchy", Nature 2026
-(https://doi.org/10.1038/s41586-026-10668-4). We follow the authors' code
-(github.com/realwsq/brainwide-RRR-encoding-model), but rebuild it step by step.
+How strongly do single neurons in each area of the mouse cortex respond to the
+task, behaviour and context variables of the IBL decision-making task?
 
-Fig. 2c shows, for each cortical area, how strongly its neurons respond on
-average to each of 8 variables (block, side, contrast, choice, outcome, wheel,
-whisker, lick). Those strengths come from a reduced-rank regression (RRR)
-encoding model fitted to every neuron.
+This repo answers it with a reduced-rank regression (RRR) encoding model
+fitted to ~20,000 neurons of the IBL Brain Wide Map. It is a from-scratch
+reimplementation of the analysis in Posani, Wang et al., "Rarely categorical,
+highly separable representations along the cortical hierarchy", Nature (2026)
+([doi](https://doi.org/10.1038/s41586-026-10668-4); authors' code:
+[realwsq/brainwide-RRR-encoding-model](https://github.com/realwsq/brainwide-RRR-encoding-model)),
+written step by step so that every choice is traceable to the paper or the
+authors' code. The final figure corresponds to the paper's Fig. 2c, which we
+use as validation.
 
-## Status
+![Mean absolute selectivity of each cortical area to each variable](outputs/results/step5_area_selectivity.png)
 
-1. Build sessions: select trials and neurons, bin spikes and behaviour. Done.
-2. Preprocessing: smooth and z-score the spikes, encode the task variables,
-   shift and z-score the movement traces. Done.
-3. Fit the RRR model (one model for all sessions, shared temporal bases). Done.
-4. Goodness of fit per neuron (delta R²) and selection of the selective ones. Done.
-5. Fig. 2c: per-area mean absolute selectivity, z-scored across areas. Done.
+Each row is a cortical area, each column one of 8 variables (block, stimulus
+side, contrast, choice, outcome, wheel, whisking, licking). A cell is the
+average selectivity of the area's well-fit neurons to that variable, z-scored
+across areas; triangles mark the 3 most selective areas per variable.
+
+## The analysis in brief
+
+1. Each neuron's activity on each trial (-0.2 to 0.8 s around the stimulus,
+   10 ms bins) is modelled as a linear combination of the 8 variables, with
+   time-varying coefficients.
+2. All coefficients' time courses are built from 5 time shapes shared by all
+   neurons (the "reduced rank"), so the model can be fitted with a few hundred
+   trials per session.
+3. Neurons whose held-out trials the model predicts better than their average
+   response (delta R² > 0.015) are kept.
+4. A neuron's selectivity to a variable is the total size of its coefficient
+   over the trial; areas are compared by their neurons' mean selectivity.
+
+## Results
+
+- 170 sessions, 19,728 neurons (4,233 in cortex); 1,739 cortical neurons are
+  well fit (41%; the paper: 33%).
+- 16 cortical areas have enough well-fit neurons for the figure (the paper
+  shows 31): we only have IBL's best-quality units, about 30% of the neurons
+  the authors used.
+- Of the paper's top-3 areas per variable that fall on areas we have, 10 of 14
+  are reproduced; the overall pattern is the paper's (frontal and motor areas
+  for choice and stimulus side, medial and frontal areas for the block,
+  somatosensory areas and AUDp for licking).
+
+Details, differences and open questions are in [docs/](docs/).
 
 ## Running it
 
-Needs the IBL AI agent's repo next to this one (`../ibl-ai-agent`), with its
-datasets downloaded. Python and packages are managed with `uv`:
+Requirements: [uv](https://docs.astral.sh/uv/), and the IBL Brain Wide Map
+datasets as downloaded by the IBL AI agent, in a sibling folder:
 
-    uv sync                                   # create the environment (once)
-    uv run python step1_build_sessions.py     # step 1, about 2.5 minutes
-    uv run python step2_preprocess.py         # step 2, about 30 seconds
-    caffeinate -i uv run python step3_fit_rrr.py   # step 3, about 1 hour
-    uv run python step4_select_neurons.py     # step 4, about 15 seconds
-    uv run python step5_fig2c.py              # step 5, a few seconds
+    git clone https://github.com/int-brain-lab/ibl-ai-agent ../ibl-ai-agent
+    cd ../ibl-ai-agent && UV_CACHE_DIR=.uv-cache uv run python scripts/download_datasets.py
+    # downloads bwm_ephys and bwm_behavior (~9 GB) into ../ibl-ai-agent/reports/datasets/
 
-`caffeinate -i` keeps the Mac awake during the long run. Step 3 saves each fit
-as soon as it is done, so if it stops, running it again resumes where it left
-off (delete `outputs/rrr/` to start over).
+Then, from this folder:
 
-`pyproject.toml` was created with these commands (`uv.lock` and `.venv/` are
-generated from it automatically):
+    uv sync                                          # create the environment (once)
+    uv run python step1_build_sessions.py            # about 2.5 minutes
+    uv run python step2_preprocess.py                # about 30 seconds
+    caffeinate -i uv run python step3_fit_rrr.py     # about 1 hour (macOS: keeps the Mac awake)
+    uv run python step4_select_neurons.py            # about 15 seconds
+    uv run python step5_area_selectivity.py          # a few seconds
+
+The code expects `bwm_ephys` 1.2.1 and `bwm_behavior` 2.0.0; with a newer
+download, update the `EPHYS` and `BEHAVIOUR` paths at the top of step 1. Step 3
+saves each fit as soon as it is done, so running it again after an
+interruption resumes where it left off.
+
+## Pipeline
+
+| Step | Script | What it does | Output |
+|---|---|---|---|
+| 1 | `step1_build_sessions.py` | select trials and neurons; bin spikes, wheel, whisking and licks | `outputs/sessions/` |
+| 2 | `step2_preprocess.py` | smooth and z-score the spikes (y); encode, time-shift and z-score the variables (X) | `outputs/preprocessed/` |
+| 3 | `step3_fit_rrr.py` | fit the RRR model: 3 cross-validation fits (held-out R²) and 1 on all trials | `outputs/rrr/` |
+| 4 | `step4_select_neurons.py` | delta R² against the average-response model; select well-fit neurons | `outputs/neurons/` |
+| 5 | `step5_area_selectivity.py` | selectivity per neuron, mean per area, z-scored, figure | `outputs/results/` |
+
+Every step also writes its figures and tables to `outputs/results/` (named
+`stepN_*`): the movement shifts, the learned time shapes of the model, its R²
+against the average-response model, and more. They are shown and explained
+step by step in [docs/pipeline.md](docs/pipeline.md). `outputs/results/` is
+kept in the repo; the data folders are regenerated by running the steps.
+
+## Documentation
+
+- [docs/pipeline.md](docs/pipeline.md): each step in detail: what it does and
+  why, its output files, results, and how it was validated.
+- [docs/differences.md](docs/differences.md): differences from the authors,
+  limitations of the method, and open questions.
+- [docs/sources.md](docs/sources.md): where every input comes from, and where
+  each rule lives in the authors' code.
+
+The environment (`pyproject.toml`) was created with:
 
     uv init --bare --python 3.12
     uv add "brainwidemap @ git+https://github.com/int-brain-lab/paper-brain-wide-map.git@de37454"
     uv add --editable ../ibl-ai-agent
-    uv add numpy pandas pyarrow scipy matplotlib scikit-learn torch
-    uv add tqdm
+    uv add numpy pandas pyarrow scipy matplotlib scikit-learn torch tqdm
 
-`ibl-ai-agent` is only used to read the agent's compressed data files.
-`brainwidemap` is needed because the agent depends on it, and it is only on GitHub.
-
-## Files
-
-- `step1_build_sessions.py`, `step2_preprocess.py`, `step3_fit_rrr.py`,
-  `step4_select_neurons.py`, `step5_fig2c.py`: steps 1-5.
-- `data/`: the two lists copied from the authors (see Inputs).
-- `outputs/sessions/`: one file per session, made by step 1, used by step 2.
-- `outputs/preprocessed/`: one file per session, made by step 2, used by step 3
-  (2.8 GB).
-- `outputs/rrr/`: the fitted model and the per-neuron test R², made by step 3,
-  used by step 4.
-- `outputs/neurons/`: one row per neuron (R², delta R², selected) and its
-  coefficients, made by step 4, used by step 5.
-- `outputs/figures/`: Fig. 2c and its values, made by step 5.
-- `outputs/checks/`: plots and tables for checking each step.
-
-## Inputs
-
-- `data/eid_list.npy`: the 178 sessions the authors used. Copied unchanged from
-  their repo (data/eid_list.npy, commit 00d40b9, Sept 2026). We use their list
-  instead of rebuilding it because the same search on today's IBL database
-  would return different sessions.
-- `data/area_list.csv`: the 43 cortical areas the paper analyses. Copied
-  unchanged from the same place. Both files: Copyright (c) 2026 Shuqi Wang,
-  MIT License.
-- The IBL data: the copies the IBL AI agent already downloaded, in
-  `../ibl-ai-agent/reports/datasets/` (bwm_ephys 1.2.1, bwm_behavior 2.0.0,
-  built from IBL's 2023_12_bwm_release). 172 of the 178 sessions are there.
-
-Why the local data and not IBL's servers: we chose not to download anything
-new (the authors estimate ~3 days for their download and training, and the
-laptop had ~15 GB of free disk). The price is that the local spike files only
-contain good units (see Differences). Getting every cluster, as the authors
-did, would mean streaming the spike files of the sessions' 289 probes from
-IBL's ONE API (roughly estimated at ~100 GB), binning each one and deleting it.
-Only the spikes given to `prepare_neurons` would change.
-
-## Step 1: build sessions
-
-`step1_build_sessions.py` goes through the authors' sessions and, for each one:
-
-- Trials (`prepare_trials`): keep trials where the mouse made a choice, moved
-  after the stimulus, and started and finished its response within 0.8 s;
-  drop the 50/50 block. Sessions with fewer than 100 trials left are skipped.
-- Neurons (`prepare_neurons`): count spikes in 100 bins of 10 ms, from -0.2 to
-  0.8 s around the stimulus. Keep neurons in a real brain area, with a session
-  firing rate between 0.5 and 50 Hz, a rate above 0.5 Hz in that window, and
-  spikes in at least half of the trials. Units with no area label in the local
-  data are what the authors' atlas mapping calls "root", so they are dropped.
-  All brain areas are kept, not only cortex: the RRR model's temporal bases
-  are shared by every neuron, so the authors fit it on all neurons and only
-  pick cortex for the figure. Sessions with fewer than 5 neurons are skipped.
-- Behaviour (`prepare_behaviour`): wheel velocity, whisker motion energy (max
-  of the two cameras) and lick counts, in 120 bins of 10 ms from -0.3 to
-  0.9 s. The extra 10 bins on each side let step 2 shift each movement trace
-  in time to line it up with the neurons.
-
-Each session is saved to `outputs/sessions/<eid>.npz`, with raw values only:
-
-- `spikes`: spike counts, (trials, 100 bins, neurons).
-- `wheel`, `whisker`, `lick`: (trials, 120 bins).
-- `trial_id`, `probabilityLeft`, `contrastLeft`, `contrastRight`, `choice`,
-  `feedbackType`: one value per trial, as in IBL's trials table. A missing
-  (NaN) contrast means no stimulus on that side; choice +1 is a clockwise
-  wheel turn and -1 counter-clockwise; feedbackType +1 is a reward.
-- `area`, `pid`, `cluster_id`: one value per neuron (Beryl area acronym,
-  probe id, IBL cluster id).
-- `dt`, `neural_start`: the time axis (0.01 s bins, starting 0.2 s before the
-  stimulus). Later steps read it from here instead of redefining it.
-
-Results: 170 of the 172 sessions pass (2 have fewer than 100 trials), with
-60,528 trials and 19,728 neurons, of which 4,233 are in cortex. The per-session
-counts are in `outputs/checks/step1_summary.csv`. The plot
-`outputs/checks/step1_check.png` shows the first session's signals averaged by
-choice: the wheel turns in opposite directions for the two choices shortly
-after the stimulus, and licks follow the response, as expected. numpy prints
-one harmless warning: in a few sessions one camera never tracks a tongue tip
-reliably, so that camera finds no licks for it; the other camera still does.
-
-How it was checked: on the first session (875c1e5c…), we rewrote the authors'
-trial and neuron selection line by line from their code (their binning,
-cropping and tests) in a throwaway script. It gave the same 535 trials and the
-same 48 neurons as our functions.
-
-## Step 2: preprocessing
-
-`step2_preprocess.py` turns each session from step 1 into what the model is
-fitted on:
-
-- Targets, y (`prepare_targets`), as in the paper's Methods ("Target
-  variables", eq. 1): spike counts smoothed in time with a Gaussian (s.d.
-  20 ms), then z-scored per neuron and time bin across trials. Smoothing turns
-  noisy 0/1 spike counts into an estimate of the firing rate. Z-scoring puts
-  every neuron and time bin on the same scale, so the fit weighs them equally
-  and coefficients can be compared across neurons. Because the mean across
-  trials is removed at every time bin, y only contains how each trial differs
-  from the average trial; that is what the model explains.
-- Inputs, X (`prepare_inputs`): the 8 variables at every trial and time bin.
-  - Task variables, constant within a trial, encoded as in the paper's Methods
-    ("Input variables"): block (+1 = left block, p(left) = 0.8), side (+1 =
-    stimulus on the left), contrast (0 for 0%, 1 for low contrast up to 12.5%,
-    4 for high), choice (+1 = clockwise), outcome (+1 = reward). The authors'
-    code computes the outcome as "stimulus side matches the choice"; we take
-    IBL's feedbackType, which is identical in all 60,528 trials.
-  - Movement variables (wheel, whisker, lick): neurons and movements are not
-    perfectly in sync, so each trace is shifted in time to where it lines up
-    best with the session's neurons; one shift per variable and session. The
-    paper's Methods only give the idea ("shifted the movement traces so that
-    the zero-lagged correlation was maximized", "averaged across neurons and
-    trials"). The details come from the authors' code (`find_bestdelay_byCC`,
-    lines 227-247, and `_preprocess_movement`, line 89, in
-    `utils/save_and_load_data.py`), and we copy them:
-    - the shift ranges over +-100 ms, which is what their -0.3 to 0.9 s
-      behaviour window allows;
-    - the measure is a cross-correlation (their "CC"): for each shift, each
-      neuron's dot product with the shifted trace (after removing each trial's
-      mean, summed over time, averaged over trials), with the neurons combined
-      as the square root of the sum of squares. It is not normalized (values
-      are not between -1 and 1), and the neurons are not plainly averaged as
-      the Methods' wording suggests: with a plain average, neurons with
-      opposite signs would cancel;
-    - if the best shift is at the edge of the range (+-100 ms), the search
-      counts as failed and the trace is used unshifted.
-  - Every variable is then z-scored per time bin across trials, as in the
-    paper's Methods (so the coefficients are comparable across variables, and
-    the ridge penalty treats them equally). The authors' code also z-scores
-    each movement trace over all bins first; the per-bin z-score undoes that,
-    so we skip it.
-
-Each session is saved to `outputs/preprocessed/<eid>.npz`:
-
-- `X`: (trials, 100 bins, 8): the 8 variables in Fig. 2 order (block, side,
-  contrast, choice, outcome, wheel, whisker, lick).
-- `y`: (trials, 100 bins, neurons).
-- `y_mean`, `y_std`: (100 bins, neurons), to turn predictions back into
-  (smoothed) spike counts.
-- `variables`, `area`, `pid`, `cluster_id`, `dt`, `neural_start`: names of
-  X's columns, the neuron table and the time axis, passed on from step 1.
-
-Results: all 170 sessions are preprocessed, in about 30 seconds. The chosen
-shifts are in `outputs/checks/step2_summary.csv` and
-`outputs/checks/step2_check.png`. They make sense: neurons tend to fire before
-the wheel moves (median +50 ms, motor commands) and after the whiskers move
-(median -30 ms, sensing the movement). The shift search fails in 37 sessions
-for the wheel, 27 for whisker and 19 for lick, and these failures continue the
-same trends: almost all wheel failures want more than +100 ms, all whisker
-failures less than -100 ms. So the +-100 ms range the authors' code allows is
-too narrow for some sessions. We keep it and the failure rule, to match them;
-neither is mentioned in the paper (see Limitations of the method).
-
-How it was checked: on 5 sessions, we computed X and y with the authors' code
-(their actual `find_bestdelay_byCC`, and the rest of `_read_Xy` rewritten line
-by line) and compared. y is identical, X differs by at most 3e-7 (rounding),
-and every chosen shift is the same.
-
-## Step 3: fitting the RRR model
-
-`step3_fit_rrr.py` fits the paper's encoding model to all neurons of all
-sessions at once.
-
-- The model (`RRR`; paper Methods, eq. 2-3): each neuron's z-scored activity
-  is a linear combination of the 8 variables, with time-varying coefficients,
-  plus a baseline per neuron and time bin:
-  `y_hat[n](k, t) = sum_v beta[n, v](t) * x[v](k, t) + b[n](t)`. Since X and
-  y are z-scored, a coefficient reads: at time t, when variable v is 1 std
-  above usual, neuron n's activity is beta[n, v](t) std above usual. Every
-  coefficient's time course is a mix of a few time shapes shared by all
-  neurons and sessions: `beta[n, v](t) = sum_i U[n, v, i] * V[i](t)`. This
-  reduced rank is what makes the fit possible with few trials: 8 x 5 = 40
-  numbers per neuron instead of 8 x 100, and every neuron helps estimate V.
-  This is why all brain areas are fitted, not only cortex.
-- The fit (`fit`; paper Methods, eq. 7): minimize the squared prediction error
-  plus a ridge penalty, lambda times the sum of all beta² (the baseline is not
-  penalized), with L-BFGS and the authors' settings, over all sessions together.
-- No hyperparameter search: we fix d = 5 shapes (the paper's best) and lambda =
-  75 (see Differences).
-- It is fitted twice over:
-  - 3 times on 70% of each session's trials, measuring each neuron's R² on the
-    other 30%, trials the model never saw (`test_r2`). Averaged over the 3
-    splits, this is the honest goodness of fit that step 4 uses to keep the
-    well-fit neurons (paper Methods: "We repeated the whole
-    split-train-test process three times"). The test fraction is 0.3 as in
-    the authors' code; the paper says one-third.
-  - once on all trials. Its coefficients are what Fig. 2c summarizes.
-- The splits are stratified by block x contrast, so every combination is in
-  both parts (paper Methods); if a session has too few trials of some
-  combination, by block only, then not at all (authors' code). The paper
-  doesn't say why only these two variables. Our reading: they are set by the
-  experimenter rather than by the mouse's behaviour, they are the ones most
-  likely to be unbalanced by chance (blocks come in long runs; 0% contrast is
-  ~10% of trials), and adding more variables would leave too few trials per
-  combination to split.
-- R² is computed on spike counts: the data and the predictions are
-  un-z-scored first (authors' code). The two versions differ. Per neuron,
-  with s(t) and m(t) the std and mean across trials at time bin t, the errors
-  in counts are the z-scored errors weighted by s(t)², and the total variation
-  in counts is K * sum_t s(t)² (trial-to-trial) + K * sum_t (m(t) - mean)² (the
-  average response over time). So on spike counts the average response also
-  counts as explained, and R² is higher than on z-scored data. We use spike
-  counts because the paper's goodness of fit and its threshold on R² minus the
-  average-response model's R² (step 4) are defined on firing rates.
-
-Output, in `outputs/rrr/`:
-
-- `split0.npz`, `split1.npz`, `split2.npz`: for each session id, one test R²
-  per neuron (same order as in step 2's files); `losses`, the fit's loss after
-  every evaluation.
-- `all_trials.npz`: the final model. `V` (5 shapes x 100 bins); for each
-  session `U_<eid>` (neurons x 8 variables x 5) and `b_<eid>` (neurons x 100
-  bins); `losses`. The coefficients are beta = U @ V.
-
-Results: about 1 hour on a 16 GB M3 laptop. Every fit converged long before
-the 1000-iteration limit (205 to 358 evaluations). The 5 learned shapes
-(`outputs/checks/step3_check.png`) are smooth and follow the task's timeline:
-flat before the stimulus, with features around the stimulus response
-(~0.1 s), the movement (~0.2-0.3 s) and after the response (~0.4 s and
-later). Individual shapes are not unique (other sets of 5 give the same
-coefficients), so only the coefficients are interpreted. The per-neuron test R²
-has a median of 0.049 and a long tail up to ~0.7; it includes the part the
-average response explains, which step 4 subtracts.
-
-How it was checked: a first fit on all trials, inspected before the full run
-(loss converging, smooth shapes); a test run of the whole script on 3 sessions
-with 10 iterations, including the saving and the resume. The model, the loss
-and the way initial values are drawn are the authors' (`RRRGD_model`); the
-random initial values themselves differ, which doesn't matter once the fit
-has converged.
-
-## Step 4: goodness of fit and selection
-
-`step4_select_neurons.py` decides which neurons the selectivity analysis uses.
-
-- R² of the RRR: each neuron's test R² from step 3, averaged over the 3 splits.
-- R² of the null model (`null_r2`; paper Methods, eq. 8): the null model
-  predicts every test trial with the average response of the training trials,
-  one value per time bin, ignoring the 8 variables (authors' `trial_avg_r2`).
-  It uses the same splits and the same R² as the RRR, imported from step 3.
-- delta R² = R²(RRR) - R²(null) (paper Methods, eq. 9): what the 8 variables
-  add beyond the average response. Both R²'s include the part the average
-  response explains on spike counts, so it cancels here.
-- A neuron is selected if delta R² > 0.015. The paper's Methods write >= 0.015;
-  the authors' `Fig2c.py` uses >, which we follow (with continuous R² values
-  the difference is negligible).
-
-Output, in `outputs/neurons/`:
-
-- `table.csv`: one row per neuron: `eid`, `pid`, `cluster_id`, `area`,
-  `r2_rrr`, `r2_null`, `delta_r2`, `selected`.
-- `beta.npy`: the coefficients of the final fit, beta = U @ V,
-  (neurons, 8 variables, 100 time bins), in the same row order as the table.
-
-Results, in about 15 seconds: almost every neuron is predicted better by the
-RRR than by the null model (`outputs/checks/step4_check.png`). 8,335 of the
-19,728 neurons are selected; in cortex, 1,739 of 4,233 (41%; the paper: 4,617
-of about 14,000, 33%). 16 cortical areas have at least 30 selected neurons,
-the minimum to appear in Fig. 2c (the paper shows 31): ACAd, AId, AUDp, MOp,
-MOs, ORBvl, PL, RSPd, RSPv, SSp-bfd, SSp-m, SSp-tr, SSs, VISa, VISam, VISp.
-3,342 neurons have a negative delta R²: the RRR predicts their unseen trials
-worse than the average does, i.e. they have no real selectivity.
-
-How it was checked: the null model and the selection follow the authors'
-`trial_avg_r2` and `Fig2c.py`; the splits and R² are step 3's own functions.
-
-## Step 5: Fig. 2c
-
-`step5_fig2c.py` makes the figure, as the authors' `Fig2c.py` does.
-
-- Selectivity of each neuron to each variable (paper Methods, "Computing the
-  selectivity profiles"): alpha = sum over the 100 time bins of |beta(t)|,
-  the total modulation over the trial. The absolute value makes effects of
-  opposite sign (or in opposite directions at different times) add up instead
-  of cancelling, and makes the arbitrary sign coding of the variables
-  irrelevant: alpha measures how strongly a neuron is modulated, not in which
-  direction.
-- Neurons: the selected ones (step 4) in the 43 cortical areas. Areas: those
-  with at least 30 such neurons (authors' `Fig2c.py`).
-- Each area's alpha is averaged over its neurons and z-scored across areas,
-  separately for each variable. Variables differ in how strongly they
-  modulate neurons overall (whisking modulates nearly everything more than the
-  block does); z-scoring per variable removes that, so each column shows which
-  areas stand out for that variable. Colours compare areas within a column,
-  not variables, and depend on which areas are shown.
-- Areas are ordered as in the authors' code: grouped by family
-  (somatosensory, visual, auditory and gustatory, retrosplenial, insular,
-  others), each in hierarchy order, then reversed. The 3 most selective areas
-  of each variable are marked with triangles, as in the published figure (the
-  authors' code uses "*").
-
-Output, in `outputs/figures/`: `fig2c.png`, and `fig2c_values.csv` with the
-z-scored values and each area's number of selected neurons.
-
-Results: 16 areas, from 1,403 selected cortical neurons. With 16 of the
-paper's 31 areas, the fair comparison is the paper's top-3 markers that fall
-on areas we have: 10 of those 14 are reproduced. Side (MOs, ACAd), choice
-(MOs, ACAd), outcome (AId, AUDp), wheel (PL, SSs) and lick (AUDp) match
-fully; block matches 1 of 3 (RSPd; ACAd and RSPv come just below); whisker
-matches 0 of 2 (SSs and SSp-bfd are high but not top; the frontal ORBvl and
-PL come first); none of the paper's contrast markers are in our areas (VISp
-leads among ours). The overall pattern is the paper's: frontal and motor areas
-lead the cognitive and choice variables, medial and frontal areas the block,
-somatosensory areas and AUDp the licking. Likely causes of the differences:
-fewer neurons per area (noisier averages), good units only, one movement
-shift per session, and lambda not searched.
-
-## Limitations of the method
-
-These come from the authors' method, which we copy on purpose. They are
-open questions, not differences from the authors.
-
-- The model is instantaneous: a neuron's activity at time t is explained by
-  the variables at the same time t. A neuron that fires 50 ms before the wheel
-  moves is only captured because the wheel trace is shifted first (step 2).
-  The paper acknowledges that their model, unlike GLMs, can't use inputs from
-  neighbouring time steps, and says it "could be incorporated in future
-  extensions" (Methods, "Comparison to previous regression models").
-- One shift per movement and session, shared by all of the session's neurons.
-  A session usually mixes neurons that lead a movement (motor-like) and
-  neurons that lag it (sensory-like). The shift is computed from all neurons
-  together, so it goes to whichever group contributes more, or lands between
-  them. The other neurons get a slightly mistimed trace and their selectivity
-  to that movement is underestimated (weakened, not lost: movements last a few
-  hundred ms and the spikes are smoothed). A probe crosses several areas, so
-  this can bias the comparison between areas. The paper doesn't discuss it.
-  Possible test: compute a best shift per neuron and see how much they spread
-  within a session.
-- The shift range is +-100 ms, and many sessions want more (see step 2
-  results). Possible test: widen the range (needs a wider behaviour window in
-  step 1) and see whether Fig. 2c changes.
-- The selectivity alpha = sum over time of |beta(t)| has a noise floor:
-  coefficients estimated from noisy data are never exactly 0, so even a
-  neuron that doesn't care about a variable gets a positive alpha. Z-scoring
-  across areas removes a floor that is the same everywhere, but areas whose
-  coefficients are noisier (fewer trials or noisier neurons) get a higher
-  floor and can look slightly more selective. Possible correction: subtract
-  each area's alpha with the variable shuffled across trials. Neither the
-  paper nor the authors' code does this.
-
-## Differences from the authors
-
-- Neurons: we only have "good units" (IBL's best-quality neurons), while the
-  authors used every neuron firing between 0.5 and 50 Hz. In the authors'
-  sessions that's about 5,800 cortical candidates instead of 39,000; after
-  step 1 we have 4,233 cortical neurons, while the paper reports about 14,000.
-  So fewer areas will reach the 30 well-fit neurons needed to appear in the
-  figure. This is by far the largest difference.
-- Sessions: 172 instead of 178, because 6 are missing from the local data.
-- Minimum of 100 trials per session: we count the trials left after all
-  selection rules. The authors' code counts before removing the 50/50 block,
-  which looks like an accident (the model is only fitted on the trials left
-  after it). This drops 2 sessions they would keep (about 20 cortical neurons).
-- Licks: the authors used IBL's lick times. The local data doesn't include
-  them, so we recompute them with IBL's own method from the tongue keypoints.
-  The keypoints come from a newer tracker (Lightning Pose instead of
-  DeepLabCut), and the right camera is stored at 60 instead of 150 frames per
-  second, so our lick times will differ somewhat.
-- Wheel velocity: the authors filter the wheel position trial by trial; we
-  filter the whole session at once with the same filter, which avoids edge
-  effects at the start and end of each trial. Small difference.
-- No hyperparameter search: the authors choose d (number of time shapes) from
-  3-6 and lambda (ridge penalty) from 25, 75 and 200 by cross-validation. We
-  fix d = 5, the best value reported in the paper, and lambda = 75, the middle
-  of their grid (the paper doesn't report which lambda won). lambda shrinks all
-  coefficients; Fig. 2c z-scores each variable across areas, so a shrinkage
-  that affects all areas alike mostly cancels out, but it can change which
-  neurons pass step 4's threshold. Testing 25 and 200 is a possible
-  sensitivity check.
-
-## What to compare our results against
-
-- The paper: about 14,000 cortical neurons after selection, of which 4,617
-  are fitted well enough by the model (ΔR² above 0.015). Fig. 2c shows 31 areas.
-- Open question, Fig. 2b: the paper reports a mean R² of 0.16 for the RRR and
-  0.09 for the "PSTH per task condition". Ours, in cortex: 0.093 for the RRR
-  and 0.068 for the null model. Two things differ. Fig. 2b's baseline is an
-  average per task condition (the paper doesn't define the conditions), a
-  stronger baseline than the null model of the Methods and the authors' code
-  (one average over all trials), which is the one the selection uses. And our
-  RRR's R² is clearly lower; the cause is unknown (good units only, lambda not
-  searched, or a different set of neurons in the paper's average). Comparing
-  with the per-neuron `RRR_r2` and `null_r2` in the authors' pre-trained model
-  would tell.
-- The authors' repo has its own Fig. 2c output
-  (`Fig2_globally_structured_brain/abs_sel_per_area.pdf`), made from their
-  pre-trained model. It doesn't exactly match the published figure: it has
-  VISC instead of FRP, and a few of the top-3 markers differ (e.g. for "side").
-  Their README says IBL data changes across versions and offers the exact data
-  on request (shuqi.wang@epfl.ch). So an exact match isn't expected; the
-  overall pattern is what to compare.
-- Their pre-trained model (`trained_RRR_model/RRR_selectivity.json`, 1.27 GB,
-  stored with Git LFS) can be downloaded to compare coefficients neuron by
-  neuron, for the neurons we share.
-
-## Where "authors' code" points to
-
-Comments in our code say whether each rule comes from the paper's Methods or
-the authors' code. In their repo (commit 00d40b9), the code is here:
-
-- Trial rules (choice, reaction and response time): `filter_trials_func` in
-  `utils/download_data.py`, called from `step1_IBL_downloaddata.py`.
-- Session firing-rate filter (0.5-50 Hz): `filter_neurons_func` in
-  `utils/download_data.py`, called from `step1_IBL_downloaddata.py`.
-- 50/50 block removal, the 100-trial minimum, the neuron rules (area, task
-  rate, silent trials), the 5-neuron minimum, and whisker = max of the two
-  cameras: `_read_Xy` in `utils/save_and_load_data.py`.
-- Time window (they download -0.3 to 0.9 s and crop the spikes to -0.2 to
-  0.8 s): `step1_IBL_downloaddata.py` and `_read_Xy`.
-- Wheel, whisker and lick signals: `get_wheelvelocity`, `get_interpbeh` and
-  `get_tongue` in `utils/download_data.py`. The wheel filter and the lick
-  detector are IBL's (`brainbox.behavior.wheel.velocity_filtered`,
-  `brainbox.behavior.dlc.get_licks`).
-- Step 2 (smoothing, z-scoring, task variable encoding): `_read_Xy` in
-  `utils/save_and_load_data.py`. Movement shifts: `find_bestdelay_byCC`
-  (lines 227-247, including the failure rule at 242-246) and
-  `_preprocess_movement` (line 89: failed search -> unshifted) in the same file.
-  `_read_Xy` also appends a column of ones to X, so that their model's
-  baseline (`RRR_b`) is the coefficient of that column. We don't: our model
-  adds the baseline explicitly. Same model, same results.
-- Step 3: the model, its initial values, the loss and the ridge penalty are
-  `RRRGD_model` in `utils/RRRGD.py`. The L-BFGS fit and the cross-validation
-  (70/30 splits, seeds 42 + split, R² on held-out trials) are
-  `train_model_hyper_selection` in `utils/RRRGD_main_CV.py`, called with the
-  grid and the stratification order (block x contrast, block, none) from
-  `step2_train_RRR.py`. R² per neuron, un-z-scored and clipped at 0:
-  `compute_R2_RRRGD` in `utils/RRRGD.py` and `compute_R2_main` in
-  `utils/utils.py`. Their fit sums all sessions' losses and computes the
-  gradient once; we compute it session by session and add the gradients
-  (gradient accumulation), so that the fit fits in 16 GB of memory. Same
-  gradients, same fit. After choosing the hyperparameters they refit the 3
-  splits under new file names; with fixed hyperparameters we need each split
-  only once.
-- Step 4: the null model's R² is `trial_avg_r2` in
-  `utils/analyze_perf_utils.py`, called from `step3_save_trainedRRR_2_df.py`,
-  which also builds their per-neuron table (`RRR_r2`, `null_r2`, `RRR_beta`).
-  The delta R² > 0.015 selection is in `Fig2_globally_structured_brain/Fig2c.py`.
-- Step 5: `Fig2_globally_structured_brain/Fig2c.py` (cortical neurons with
-  delta R² > 0.015, areas with at least 30, alpha = sum over time of |beta|,
-  area mean, z-score per variable across areas, the area order, top 3 marked).
+`ibl-ai-agent` is only used to decode the agent's compressed data files;
+`brainwidemap` is a dependency of the agent, only available on GitHub.

@@ -6,12 +6,12 @@ It is fitted (fit) in two ways:
   - N_SPLITS times on 70% of each session's trials, to measure each neuron's
     R² on the 30% it didn't see (test_r2). Step 4 uses it to keep the
     well-fit neurons.
-  - once on all trials, for the coefficients (beta) used in Fig. 2c.
+  - once on all trials, for the coefficients (beta) used in step 5.
 Each fit is saved as soon as it is done and skipped if its file already exists,
 so an interrupted run resumes where it stopped.
 
 Output: in outputs/rrr/, the per-neuron test R² of each split and the final
-model; a check plot in outputs/checks/.
+model; a figure in outputs/results/.
 """
 from pathlib import Path
 
@@ -26,7 +26,7 @@ PREPROCESSED_DIR = "outputs/preprocessed"  # step 2's output
 
 # ---- Outputs
 RRR_DIR = "outputs/rrr"        # per-split test R² and the final model (used by step 4)
-CHECKS_DIR = "outputs/checks"  # check plot
+RESULTS_DIR = "outputs/results"  # figure (kept in the repo)
 
 # ---- Model
 RANK = 5  # d, number of shared time shapes (paper: d = 5 was best)
@@ -188,9 +188,9 @@ def test_r2(model, eid, x, y, y_mean, y_std):
     return r2_spike_counts(y, y_hat, y_mean, y_std)
 
 
-# ================================================================ check
+# ================================================================ figure
 
-def plot_check(final, splits, dt, neural_start, path):
+def plot_fit(final, splits, dt, neural_start, path):
     """The final fit's loss and time shapes V, and the distribution of the test R².
 
     `final` and `splits` are the saved .npz files of the final and split fits.
@@ -227,7 +227,7 @@ if __name__ == "__main__":
     dt, neural_start = float(first["dt"]), float(first["neural_start"])  # time axis, set in step 1
     print(f"Sessions: {len(data)}, neurons: {sum(d['y'].shape[2] for d in data.values())}")
     Path(RRR_DIR).mkdir(parents=True, exist_ok=True)
-    Path(CHECKS_DIR).mkdir(parents=True, exist_ok=True)
+    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
 
     # 2. The split fits: fit on 70% of the trials, measure each neuron's R² on the other 30%.
     for split in range(N_SPLITS):
@@ -245,7 +245,7 @@ if __name__ == "__main__":
                   for eid, d in data.items()}
             np.savez(path, **r2, losses=losses)  # one R² per neuron, for each session
 
-    # 3. The final fit, on all trials: its coefficients go to Fig. 2c.
+    # 3. The final fit, on all trials: its coefficients go to step 5.
     path = f"{RRR_DIR}/all_trials.npz"
     if not Path(path).exists():
         all_trials = _as_tensors(data, {eid: np.arange(len(d["X"])) for eid, d in data.items()})
@@ -255,10 +255,10 @@ if __name__ == "__main__":
                  **{f"U_{eid}": model.U[eid].detach().numpy() for eid in data},
                  **{f"b_{eid}": model.b[eid].detach().numpy() for eid in data})
 
-    # 4. Check plot and summary.
+    # 4. Figure and summary.
     splits = [np.load(f"{RRR_DIR}/split{split}.npz") for split in range(N_SPLITS)]
     final = np.load(f"{RRR_DIR}/all_trials.npz")
-    plot_check(final, splits, dt, neural_start, f"{CHECKS_DIR}/step3_check.png")
+    plot_fit(final, splits, dt, neural_start, f"{RESULTS_DIR}/step3_fit.png")
     r2 = np.concatenate([np.mean([s[eid] for s in splits], axis=0) for eid in data])
     print(f"Done. Per-neuron test R²: median {np.median(r2):.3f}, "
           f"above 0 for {(r2 > 0).mean():.0%} of {len(r2)} neurons.")

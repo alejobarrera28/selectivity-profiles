@@ -5,8 +5,8 @@ fitted on:
   prepare_targets -> y: smoothed spike counts, z-scored per neuron and time bin
   prepare_inputs  -> X: the 8 variables, z-scored per variable and time bin
 
-Output: one file per session in outputs/preprocessed/, plus a check plot and a
-per-session summary in outputs/checks/.
+Output: one file per session in outputs/preprocessed/, plus a figure and a
+per-session table in outputs/results/.
 """
 from pathlib import Path
 
@@ -20,7 +20,7 @@ SESSIONS_DIR = "outputs/sessions"  # step 1's output
 
 # ---- Outputs
 PREPROCESSED_DIR = "outputs/preprocessed"  # one .npz per session (used by step 3)
-CHECKS_DIR = "outputs/checks"              # check plot and per-session summary
+RESULTS_DIR = "outputs/results"            # figure and per-session table (kept in the repo)
 
 # ---- Z-scoring (y and X)
 STD_FLOOR = 1e-8  # authors' code: avoids dividing by 0 when a value never varies across trials
@@ -137,9 +137,9 @@ def prepare_inputs(session, spikes):
     return x, shifts
 
 
-# ================================================================ check
+# ================================================================ figure
 
-def plot_check(first_shifts, summary, dt, path):
+def plot_movement_shifts(first_shifts, summary, dt, path):
     """Top: for one session, how well each shift lines up each movement with the neurons.
     Bottom: the shift chosen for each movement across all sessions.
     """
@@ -170,7 +170,7 @@ if __name__ == "__main__":
 
     # 2. For each session: build y and X and save them.
     Path(PREPROCESSED_DIR).mkdir(parents=True, exist_ok=True)
-    Path(CHECKS_DIR).mkdir(parents=True, exist_ok=True)
+    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
     summary = []
     for i, path in enumerate(paths):
         # ---- Read step 1's file
@@ -205,13 +205,13 @@ if __name__ == "__main__":
         summary.append({"eid": path.stem, "trials": y.shape[0], "neurons": y.shape[2],
                         **shift_ms, **failed})
 
-        # ---- Check (the first session's cross-correlation curves go in the check plot)
+        # ---- Figure (the first session's cross-correlation curves go in it)
         if i == 0:
             first_shifts = shifts
 
-    # 3. Summary of the whole step, also saved as a table, and the check plot.
+    # 3. Summary of the whole step, also saved as a table, and the figure.
     summary = pd.DataFrame(summary)
-    summary.to_csv(f"{CHECKS_DIR}/step2_summary.csv", index=False)
-    plot_check(first_shifts, summary, dt, f"{CHECKS_DIR}/step2_check.png")
+    summary.to_csv(f"{RESULTS_DIR}/step2_shifts.csv", index=False)
+    plot_movement_shifts(first_shifts, summary, dt, f"{RESULTS_DIR}/step2_movement_shifts.png")
     print(f"\nPreprocessed {len(summary)} sessions. Failed shift searches (no shift used): "
           + ", ".join(f"{name} {summary[f'{name}_search_failed'].sum()}" for name in MOVEMENTS))

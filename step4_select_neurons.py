@@ -8,7 +8,7 @@ For each neuron:
     response. Neurons with delta R² above MIN_DELTA_R2 are "selective".
 
 Output: a table with one row per neuron and their coefficients (beta), in
-outputs/neurons/; a check plot in outputs/checks/.
+outputs/neurons/; a figure in outputs/results/.
 """
 from pathlib import Path
 
@@ -24,7 +24,7 @@ RRR_DIR = "outputs/rrr"                    # step 3's output
 
 # ---- Outputs
 NEURONS_DIR = "outputs/neurons"  # per-neuron table and coefficients (used by step 5)
-CHECKS_DIR = "outputs/checks"    # check plot
+RESULTS_DIR = "outputs/results"  # figure (kept in the repo)
 
 # ---- Selection
 # Authors' Fig2c.py keeps neurons with delta R² > 0.015 (the paper's Methods say >= 0.015).
@@ -48,9 +48,9 @@ def null_r2(session):
     return np.mean(r2, axis=0)
 
 
-# ================================================================ check
+# ================================================================ figure
 
-def plot_check(table, path):
+def plot_r2_vs_null(table, path):
     """R² of the RRR against R² of the null model, and the distribution of delta R².
 
     Like the paper's Fig. 2b, except that Fig. 2b compares with an average per
@@ -99,12 +99,12 @@ if __name__ == "__main__":
 
     # 3. Save: one row per neuron, and its coefficients in the same order.
     Path(NEURONS_DIR).mkdir(parents=True, exist_ok=True)
-    Path(CHECKS_DIR).mkdir(parents=True, exist_ok=True)
+    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
     table.to_csv(f"{NEURONS_DIR}/table.csv", index=False)
     np.save(f"{NEURONS_DIR}/beta.npy", np.concatenate(betas).astype(np.float32))
 
-    # 4. Check plot and summary.
-    plot_check(table, f"{CHECKS_DIR}/step4_check.png")
+    # 4. Figure and summary.
+    plot_r2_vs_null(table, f"{RESULTS_DIR}/step4_r2_vs_null.png")
     print(f"Neurons: {len(table)}. Mean R²: RRR {table.r2_rrr.mean():.3f}, "
           f"null {table.r2_null.mean():.3f}. Selected (delta R² > {MIN_DELTA_R2}): "
           f"{table.selected.sum()}")
