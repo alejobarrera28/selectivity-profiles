@@ -16,7 +16,7 @@ encoding model fitted to every neuron.
 2. Preprocessing: smooth and z-score the spikes, encode the task variables,
    shift and z-score the movement traces. Done.
 3. Fit the RRR model (one model for all sessions, shared temporal bases). Done.
-4. Export the fitted coefficients per neuron, with the goodness of fit. To do.
+4. Goodness of fit per neuron (delta R²) and selection of the selective ones. Done.
 5. Fig. 2c: per-area mean absolute selectivity, z-scored across areas. To do.
 
 ## Running it
@@ -28,6 +28,7 @@ datasets downloaded. Python and packages are managed with `uv`:
     uv run python step1_build_sessions.py     # step 1, about 2.5 minutes
     uv run python step2_preprocess.py         # step 2, about 30 seconds
     caffeinate -i uv run python step3_fit_rrr.py   # step 3, about 1 hour
+    uv run python step4_select_neurons.py     # step 4, about 15 seconds
 
 `caffeinate -i` keeps the Mac awake during the long run. Step 3 saves each fit
 as soon as it is done, so if it stops, running it again resumes where it left
@@ -47,13 +48,16 @@ generated from it automatically):
 
 ## Files
 
-- `step1_build_sessions.py`, `step2_preprocess.py`, `step3_fit_rrr.py`: steps 1-3.
+- `step1_build_sessions.py`, `step2_preprocess.py`, `step3_fit_rrr.py`,
+  `step4_select_neurons.py`: steps 1-4.
 - `data/`: the two lists copied from the authors (see Inputs).
 - `outputs/sessions/`: one file per session, made by step 1, used by step 2.
 - `outputs/preprocessed/`: one file per session, made by step 2, used by step 3
   (2.8 GB).
 - `outputs/rrr/`: the fitted model and the per-neuron test R², made by step 3,
   used by step 4.
+- `outputs/neurons/`: one row per neuron (R², delta R², selected) and its
+  coefficients, made by step 4, used by step 5.
 - `outputs/checks/`: plots and tables for checking each step.
 
 ## Inputs
@@ -266,6 +270,41 @@ and the way initial values are drawn are the authors' (`RRRGD_model`); the
 random initial values themselves differ, which doesn't matter once the fit
 has converged.
 
+## Step 4: goodness of fit and selection
+
+`step4_select_neurons.py` decides which neurons the selectivity analysis uses.
+
+- R² of the RRR: each neuron's test R² from step 3, averaged over the 3 splits.
+- R² of the null model (`null_r2`; paper Methods, eq. 8): the null model
+  predicts every test trial with the average response of the training trials,
+  one value per time bin, ignoring the 8 variables (authors' `trial_avg_r2`).
+  It uses the same splits and the same R² as the RRR, imported from step 3.
+- delta R² = R²(RRR) - R²(null) (paper Methods, eq. 9): what the 8 variables
+  add beyond the average response. Both R²'s include the part the average
+  response explains on spike counts, so it cancels here.
+- A neuron is selected if delta R² > 0.015. The paper's Methods write >= 0.015;
+  the authors' `Fig2c.py` uses >, which we follow (with continuous R² values
+  the difference is negligible).
+
+Output, in `outputs/neurons/`:
+
+- `table.csv`: one row per neuron: `eid`, `pid`, `cluster_id`, `area`,
+  `r2_rrr`, `r2_null`, `delta_r2`, `selected`.
+- `beta.npy`: the coefficients of the final fit, beta = U @ V,
+  (neurons, 8 variables, 100 time bins), in the same row order as the table.
+
+Results, in about 15 seconds: almost every neuron is predicted better by the
+RRR than by the null model (`outputs/checks/step4_check.png`). 8,335 of the
+19,728 neurons are selected; in cortex, 1,739 of 4,233 (41%; the paper: 4,617
+of about 14,000, 33%). 16 cortical areas have at least 30 selected neurons,
+the minimum to appear in Fig. 2c (the paper shows 31): ACAd, AId, AUDp, MOp,
+MOs, ORBvl, PL, RSPd, RSPv, SSp-bfd, SSp-m, SSp-tr, SSs, VISa, VISam, VISp.
+3,342 neurons have a negative delta R²: the RRR predicts their unseen trials
+worse than the average does, i.e. they have no real selectivity.
+
+How it was checked: the null model and the selection follow the authors'
+`trial_avg_r2` and `Fig2c.py`; the splits and R² are step 3's own functions.
+
 ## Limitations of the method
 
 These come from the authors' method, which we copy on purpose. They are
@@ -325,6 +364,16 @@ open questions, not differences from the authors.
 
 - The paper: about 14,000 cortical neurons after selection, of which 4,617
   are fitted well enough by the model (ΔR² above 0.015). Fig. 2c shows 31 areas.
+- Open question, Fig. 2b: the paper reports a mean R² of 0.16 for the RRR and
+  0.09 for the "PSTH per task condition". Ours, in cortex: 0.093 for the RRR
+  and 0.068 for the null model. Two things differ. Fig. 2b's baseline is an
+  average per task condition (the paper doesn't define the conditions), a
+  stronger baseline than the null model of the Methods and the authors' code
+  (one average over all trials), which is the one the selection uses. And our
+  RRR's R² is clearly lower; the cause is unknown (good units only, lambda not
+  searched, or a different set of neurons in the paper's average). Comparing
+  with the per-neuron `RRR_r2` and `null_r2` in the authors' pre-trained model
+  would tell.
 - The authors' repo has its own Fig. 2c output
   (`Fig2_globally_structured_brain/abs_sel_per_area.pdf`), made from their
   pre-trained model. It doesn't exactly match the published figure: it has
@@ -374,3 +423,7 @@ the authors' code. In their repo (commit 00d40b9), the code is here:
   gradients, same fit. After choosing the hyperparameters they refit the 3
   splits under new file names; with fixed hyperparameters we need each split
   only once.
+- Step 4: the null model's R² is `trial_avg_r2` in
+  `utils/analyze_perf_utils.py`, called from `step3_save_trainedRRR_2_df.py`,
+  which also builds their per-neuron table (`RRR_r2`, `null_r2`, `RRR_beta`).
+  The delta R² > 0.015 selection is in `Fig2_globally_structured_brain/Fig2c.py`.

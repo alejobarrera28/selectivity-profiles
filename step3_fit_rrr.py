@@ -137,13 +137,13 @@ def fit(model, sessions, l2, name):
 
 # ================================================================ cross-validation
 
-def _split_trials(x, variables, split):
+def split_trials(x, variables, split):
     """Training and test trial indices of one session, for one split.
 
     The test trials are TEST_FRACTION of the trials, drawn so that every block x
     contrast combination is in both parts (paper Methods). If a session has too
     few trials of some combination, balance by block only, then not at all
-    (authors' code).
+    (authors' code). Also used by step 4, which needs the same splits.
     """
     first_bin = x[:, 0, :]  # task variables are constant within a trial
     block = first_bin[:, list(variables).index("block")]
@@ -159,11 +159,11 @@ def _split_trials(x, variables, split):
     return train_test_split(trials, test_size=TEST_FRACTION, random_state=SPLIT_SEED + split)
 
 
-def test_r2(model, eid, x, y, y_mean, y_std):
-    """R² of each neuron on held-out trials (authors' compute_R2_RRRGD).
+def r2_spike_counts(y, y_hat, y_mean, y_std):
+    """R² of each neuron, on spike counts (authors' compute_R2_RRRGD).
 
-    The data and the predictions are un-z-scored first, and R² is computed on
-    the smoothed spike counts; each neuron's R² is clipped at 0.
+    y and y_hat are z-scored (trials, time bins, neurons); they are un-z-scored
+    first, and each neuron's R² is clipped at 0. Also used by step 4.
 
     The two versions measure different things. On z-scored data, R² is the
     share of the trial-to-trial variation the model explains. On spike counts,
@@ -173,12 +173,17 @@ def test_r2(model, eid, x, y, y_mean, y_std):
     average-response model's R², are defined on firing rates, so we use the
     spike-count version.
     """
-    with torch.no_grad():
-        y_hat = model.predict(eid, x).numpy()
     y, y_hat = y * y_std + y_mean, y_hat * y_std + y_mean
     y, y_hat = y.reshape(-1, y.shape[2]), y_hat.reshape(-1, y.shape[2])  # (trials x bins, neurons)
     r2 = 1 - ((y - y_hat) ** 2).sum(axis=0) / ((y - y.mean(axis=0)) ** 2).sum(axis=0)
     return np.clip(r2, 0, None)
+
+
+def test_r2(model, eid, x, y, y_mean, y_std):
+    """R² of each neuron on held-out trials (x, y), from the model's predictions."""
+    with torch.no_grad():
+        y_hat = model.predict(eid, x).numpy()
+    return r2_spike_counts(y, y_hat, y_mean, y_std)
 
 
 # ================================================================ check
@@ -228,7 +233,7 @@ if __name__ == "__main__":
         if not Path(path).exists():  # otherwise it was done in an earlier run
             train, test = {}, {}
             for eid, d in data.items():
-                train[eid], test[eid] = _split_trials(d["X"], variables, split)
+                train[eid], test[eid] = split_trials(d["X"], variables, split)
             training = _as_tensors(data, train)
             model = RRR(training, RANK)
             losses = fit(model, training, L2, name=f"split {split + 1}/{N_SPLITS}")
