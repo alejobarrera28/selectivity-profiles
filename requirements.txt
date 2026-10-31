@@ -1,0 +1,17 @@
+# Python 3.12. Install into a conda environment (see README):
+#   conda create -n selectivity-profiles python=3.12
+#   conda activate selectivity-profiles && pip install -r requirements.txt
+
+# The IBL agent, only to decode its compressed data files, and brainwidemap, a
+# dependency of the agent only available on GitHub.
+-e ../ibl-ai-agent
+brainwidemap @ git+https://github.com/int-brain-lab/paper-brain-wide-map.git@de37454426bc4107047b5a18b854fc1ef7a5959c
+
+matplotlib==3.11.2
+numpy==2.5.3
+pandas==3.0.6
+pyarrow==26.0.0
+scikit-learn==1.9.1
+scipy==1.18.1
+torch==2.14.1
+tqdm==4.70.1
