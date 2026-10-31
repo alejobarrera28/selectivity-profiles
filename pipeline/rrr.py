@@ -1,32 +1,17 @@
-"""Step 3: fit the reduced-rank regression (RRR) model to all sessions.
+"""Checkpoint 3: the reduced-rank regression (RRR) model, fitted to all sessions.
 
 The model (RRR) predicts each neuron's activity y from the 8 variables X, with
 time-varying coefficients built from a few time shapes shared by all neurons.
 It is fitted (fit) in two ways:
   - N_SPLITS times on 70% of each session's trials, to measure each neuron's
-    R² on the 30% it didn't see (test_r2). Step 4 uses it to keep the
-    well-fit neurons.
-  - once on all trials, for the coefficients (beta) used in step 5.
-Each fit is saved as soon as it is done and skipped if its file already exists,
-so an interrupted run resumes where it stopped.
-
-Output: in outputs/rrr/, the per-neuron test R² of each split and the final
-model; a figure in outputs/results/.
+    R² on the 30% it didn't see (cross_validated_r2). The profiles use it to
+    keep the well-fit neurons.
+  - once on all trials, for the coefficients (fit_all_trials) used in the profiles.
 """
-from pathlib import Path
-
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 from sklearn.model_selection import train_test_split
 from tqdm import tqdm
-
-# ---- Data location
-PREPROCESSED_DIR = "outputs/preprocessed"  # step 2's output
-
-# ---- Outputs
-RRR_DIR = "outputs/rrr"        # per-split test R² and the final model (used by step 4)
-RESULTS_DIR = "outputs/results"  # figure (kept in the repo)
 
 # ---- Model
 RANK = 5  # d, number of shared time shapes (paper: d = 5 was best)
@@ -137,6 +122,18 @@ def fit(model, sessions, l2, name):
     return losses
 
 
+def fit_all_trials(data):
+    """Fit on all trials of every session, for the coefficients (beta).
+
+    `data` maps each session id to its inputs (checkpoint 2). Returns the
+    fitted model and its losses.
+    """
+    all_trials = _as_tensors(data, {eid: np.arange(len(d["X"])) for eid, d in data.items()})
+    model = RRR(all_trials, RANK)
+    losses = fit(model, all_trials, L2, name="final fit (all trials)")
+    return model, losses
+
+
 # ================================================================ cross-validation
 
 def split_trials(x, variables, split):
@@ -145,7 +142,7 @@ def split_trials(x, variables, split):
     The test trials are TEST_FRACTION of the trials, drawn so that every block x
     contrast combination is in both parts (paper Methods). If a session has too
     few trials of some combination, balance by block only, then not at all
-    (authors' code). Also used by step 4, which needs the same splits.
+    (authors' code). Also used by the profiles' null model, which needs the same splits.
     """
     first_bin = x[:, 0, :]  # task variables are constant within a trial
     block = first_bin[:, list(variables).index("block")]
@@ -165,14 +162,14 @@ def r2_spike_counts(y, y_hat, y_mean, y_std):
     """R² of each neuron, on spike counts (authors' compute_R2_RRRGD).
 
     y and y_hat are z-scored (trials, time bins, neurons); they are un-z-scored
-    first, and each neuron's R² is clipped at 0. Also used by step 4.
+    first, and each neuron's R² is clipped at 0. Also used by the profiles' null model.
 
     The two versions measure different things. On z-scored data, R² is the
     share of the trial-to-trial variation the model explains. On spike counts,
     the average response over time is added back to both data and prediction,
     so it also counts as explained: R² is the share of all variation, and is
-    higher. The paper's goodness of fit, and step 4's threshold on R² minus the
-    average-response model's R², are defined on firing rates, so we use the
+    higher. The paper's goodness of fit, and the profiles' threshold on R² minus
+    the average-response model's R², are defined on firing rates, so we use the
     spike-count version.
     """
     y, y_hat = y * y_std + y_mean, y_hat * y_std + y_mean
@@ -188,77 +185,20 @@ def test_r2(model, eid, x, y, y_mean, y_std):
     return r2_spike_counts(y, y_hat, y_mean, y_std)
 
 
-# ================================================================ figure
+def cross_validated_r2(data, split):
+    """Fit on one split's training trials; R² of each neuron on its test trials.
 
-def plot_fit(final, splits, dt, neural_start, path):
-    """The final fit's loss and time shapes V, and the distribution of the test R².
-
-    `final` and `splits` are the saved .npz files of the final and split fits.
+    `data` maps each session id to its inputs (checkpoint 2). Returns
+    {eid: R² per neuron} and the fit's losses.
     """
-    fig, axes = plt.subplots(1, 3, figsize=(15, 3.5))
-    losses = final["losses"]
-    axes[0].plot(100 * losses / losses[0])
-    axes[0].set(xlabel="evaluation", ylabel="loss (% of starting loss)",
-                ylim=(100 * losses.min() / losses[0] - 0.5, 100.5), title="final fit")
-    t = neural_start + dt * (np.arange(final["V"].shape[1]) + 0.5)  # bin centres
-    for i, shape in enumerate(final["V"]):
-        axes[1].plot(t, shape, label=f"V{i + 1}")
-    axes[1].axvline(0, color="k", lw=0.5)
-    axes[1].set(xlabel="time from stimulus onset (s)", title="learned time shapes V")
-    axes[1].legend(fontsize=7)
-    eids = [key for key in splits[0].files if key != "losses"]
-    r2 = np.concatenate([np.mean([split[eid] for split in splits], axis=0) for eid in eids])
-    axes[2].hist(r2, bins=50)
-    axes[2].set(xlabel=f"test R² (mean of {len(splits)} splits)", ylabel="neurons",
-                title=f"per-neuron test R² (median {np.median(r2):.3f})")
-    fig.tight_layout()
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
-
-
-# ================================================================ main
-
-if __name__ == "__main__":
-    # 1. Load every preprocessed session. They stay in float32 to save memory;
-    #    each fit converts the trials it uses to float64, as in the authors' code.
-    data = {path.stem: dict(np.load(path)) for path in sorted(Path(PREPROCESSED_DIR).glob("*.npz"))}
-    first = next(iter(data.values()))
-    variables = first["variables"]
-    dt, neural_start = float(first["dt"]), float(first["neural_start"])  # time axis, set in step 1
-    print(f"Sessions: {len(data)}, neurons: {sum(d['y'].shape[2] for d in data.values())}")
-    Path(RRR_DIR).mkdir(parents=True, exist_ok=True)
-    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
-
-    # 2. The split fits: fit on 70% of the trials, measure each neuron's R² on the other 30%.
-    for split in range(N_SPLITS):
-        path = f"{RRR_DIR}/split{split}.npz"
-        if not Path(path).exists():  # otherwise it was done in an earlier run
-            train, test = {}, {}
-            for eid, d in data.items():
-                train[eid], test[eid] = split_trials(d["X"], variables, split)
-            training = _as_tensors(data, train)
-            model = RRR(training, RANK)
-            losses = fit(model, training, L2, name=f"split {split + 1}/{N_SPLITS}")
-            del training  # free the memory before the next fit
-            r2 = {eid: test_r2(model, eid, torch.tensor(d["X"][test[eid]], dtype=torch.float64),
-                               d["y"][test[eid]], d["y_mean"], d["y_std"])
-                  for eid, d in data.items()}
-            np.savez(path, **r2, losses=losses)  # one R² per neuron, for each session
-
-    # 3. The final fit, on all trials: its coefficients go to step 5.
-    path = f"{RRR_DIR}/all_trials.npz"
-    if not Path(path).exists():
-        all_trials = _as_tensors(data, {eid: np.arange(len(d["X"])) for eid, d in data.items()})
-        model = RRR(all_trials, RANK)
-        losses = fit(model, all_trials, L2, name="final fit (all trials)")
-        np.savez(path, V=model.V.detach().numpy(), losses=losses,
-                 **{f"U_{eid}": model.U[eid].detach().numpy() for eid in data},
-                 **{f"b_{eid}": model.b[eid].detach().numpy() for eid in data})
-
-    # 4. Figure and summary.
-    splits = [np.load(f"{RRR_DIR}/split{split}.npz") for split in range(N_SPLITS)]
-    final = np.load(f"{RRR_DIR}/all_trials.npz")
-    plot_fit(final, splits, dt, neural_start, f"{RESULTS_DIR}/step3_fit.png")
-    r2 = np.concatenate([np.mean([s[eid] for s in splits], axis=0) for eid in data])
-    print(f"Done. Per-neuron test R²: median {np.median(r2):.3f}, "
-          f"above 0 for {(r2 > 0).mean():.0%} of {len(r2)} neurons.")
+    train, test = {}, {}
+    for eid, d in data.items():
+        train[eid], test[eid] = split_trials(d["X"], d["variables"], split)
+    training = _as_tensors(data, train)
+    model = RRR(training, RANK)
+    losses = fit(model, training, L2, name=f"split {split + 1}/{N_SPLITS}")
+    del training  # free the memory before the next fit
+    r2 = {eid: test_r2(model, eid, torch.tensor(d["X"][test[eid]], dtype=torch.float64),
+                       d["y"][test[eid]], d["y_mean"], d["y_std"])
+          for eid, d in data.items()}
+    return r2, losses

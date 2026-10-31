@@ -1,26 +1,11 @@
-"""Step 2: turn each session from step 1 into the model's inputs (X) and targets (y).
+"""Checkpoint 2: turn each session from checkpoint 1 into the model's inputs (X) and targets (y).
 
-For each session saved by step 1, two functions build what the RRR model is
-fitted on:
+For each session, two functions build what the RRR model is fitted on:
   prepare_targets -> y: smoothed spike counts, z-scored per neuron and time bin
   prepare_inputs  -> X: the 8 variables, z-scored per variable and time bin
-
-Output: one file per session in outputs/preprocessed/, plus a figure and a
-per-session table in outputs/results/.
 """
-from pathlib import Path
-
-import matplotlib.pyplot as plt
 import numpy as np
-import pandas as pd
 from scipy.ndimage import gaussian_filter1d
-
-# ---- Data location
-SESSIONS_DIR = "outputs/sessions"  # step 1's output
-
-# ---- Outputs
-PREPROCESSED_DIR = "outputs/preprocessed"  # one .npz per session (used by step 3)
-RESULTS_DIR = "outputs/results"            # figure and per-session table (kept in the repo)
 
 # ---- Z-scoring (y and X)
 STD_FLOOR = 1e-8  # authors' code: avoids dividing by 0 when a value never varies across trials
@@ -116,6 +101,7 @@ def _best_shift(trace, spikes):
 def prepare_inputs(session, spikes):
     """X: the 8 variables at every trial and time bin, z-scored.
 
+    `session` holds a session's trial columns and movement traces (checkpoint 1).
     Task variables are constant within a trial. Movement traces are shifted by
     their best shift (_best_shift) and cut to the neural time bins. Every
     variable is then z-scored per time bin, so that the coefficients are
@@ -135,83 +121,3 @@ def prepare_inputs(session, spikes):
     x = np.stack([columns[name] for name in VARIABLES], axis=2).astype(float)
     x, _, _ = _zscore_over_trials(x)
     return x, shifts
-
-
-# ================================================================ figure
-
-def plot_movement_shifts(first_shifts, summary, dt, path):
-    """Top: for one session, how well each shift lines up each movement with the neurons.
-    Bottom: the shift chosen for each movement across all sessions.
-    """
-    fig, axes = plt.subplots(2, len(MOVEMENTS), figsize=(12, 6))
-    for j, name in enumerate(MOVEMENTS):
-        shift, cross_corr = first_shifts[name]
-        max_shift = (len(cross_corr) - 1) // 2
-        shifts_ms = np.arange(-max_shift, max_shift + 1) * dt * 1000
-        axes[0, j].plot(shifts_ms, cross_corr, marker=".")
-        axes[0, j].axvline(shift * dt * 1000, color="r", lw=1, label="chosen")
-        axes[0, j].set(title=f"{name} (first session)", xlabel="shift (ms)",
-                       ylabel="cross-correlation with neurons")
-        axes[1, j].hist(summary[f"{name}_shift_ms"], bins=shifts_ms - dt * 500)
-        axes[1, j].set(title=f"{name} (all sessions)", xlabel="chosen shift (ms)",
-                       ylabel="sessions")
-    axes[0, 0].legend(fontsize=7)
-    fig.tight_layout()
-    fig.savefig(path, dpi=120)
-    plt.close(fig)
-
-
-# ================================================================ main
-
-if __name__ == "__main__":
-    # 1. The sessions saved by step 1.
-    paths = sorted(Path(SESSIONS_DIR).glob("*.npz"))
-    print(f"Sessions from step 1: {len(paths)}")
-
-    # 2. For each session: build y and X and save them.
-    Path(PREPROCESSED_DIR).mkdir(parents=True, exist_ok=True)
-    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
-    summary = []
-    for i, path in enumerate(paths):
-        # ---- Read step 1's file
-        session = np.load(path)
-        spikes = session["spikes"]
-        dt = float(session["dt"])  # seconds per time bin, set in step 1
-
-        # ---- Targets
-        y, y_mean, y_std = prepare_targets(spikes)
-
-        # ---- Inputs
-        x, shifts = prepare_inputs(session, spikes)
-
-        # ---- Save (not compressed: z-scored decimals barely compress)
-        np.savez(
-            f"{PREPROCESSED_DIR}/{path.stem}.npz",
-            X=x.astype(np.float32),                 # (trials, 100 bins, 8 variables)
-            y=y.astype(np.float32),                 # (trials, 100 bins, neurons)
-            y_mean=y_mean.astype(np.float32),       # (100 bins, neurons), to undo the z-score
-            y_std=y_std.astype(np.float32),
-            variables=np.array(VARIABLES),          # names of X's 8 columns
-            area=session["area"], pid=session["pid"], cluster_id=session["cluster_id"],
-            dt=session["dt"], neural_start=session["neural_start"],  # time axis, passed on from step 1
-        )
-        shift_ms = {f"{name}_shift_ms": round(shifts[name][0] * dt * 1000) for name in MOVEMENTS}
-        # A failed search (best shift at the edge of the range) also gives 0 ms.
-        failed = {f"{name}_search_failed":
-                  np.argmax(shifts[name][1]) in (0, len(shifts[name][1]) - 1)
-                  for name in MOVEMENTS}
-        print(f"{i + 1:3d}/{len(paths)} {path.stem}: X {x.shape}, y {y.shape}, shifts (ms) "
-              + ", ".join(f"{name} {shift_ms[f'{name}_shift_ms']:+d}" for name in MOVEMENTS))
-        summary.append({"eid": path.stem, "trials": y.shape[0], "neurons": y.shape[2],
-                        **shift_ms, **failed})
-
-        # ---- Figure (the first session's cross-correlation curves go in it)
-        if i == 0:
-            first_shifts = shifts
-
-    # 3. Summary of the whole step, also saved as a table, and the figure.
-    summary = pd.DataFrame(summary)
-    summary.to_csv(f"{RESULTS_DIR}/step2_shifts.csv", index=False)
-    plot_movement_shifts(first_shifts, summary, dt, f"{RESULTS_DIR}/step2_movement_shifts.png")
-    print(f"\nPreprocessed {len(summary)} sessions. Failed shift searches (no shift used): "
-          + ", ".join(f"{name} {summary[f'{name}_search_failed'].sum()}" for name in MOVEMENTS))

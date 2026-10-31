@@ -49,13 +49,13 @@ would change.
   `get_tongue` in `utils/download_data.py`. The wheel filter and the lick
   detector are IBL's (`brainbox.behavior.wheel.velocity_filtered`,
   `brainbox.behavior.dlc.get_licks`).
-- Step 2 (smoothing, z-scoring, task variable encoding): `_read_Xy` in
+- Inputs (smoothing, z-scoring, task variable encoding): `_read_Xy` in
   `utils/save_and_load_data.py`. Movement shifts: `find_bestdelay_byCC`
   (lines 227-247, including the failure rule at 242-246) and
   `_preprocess_movement` (line 89: failed search -> unshifted) in the same
   file. The authors compute the outcome as "stimulus side matches the choice";
   we take IBL's feedbackType, identical in every trial.
-- Step 3: the model, its initial values, the loss and the ridge penalty are
+- Model: the model, its initial values, the loss and the ridge penalty are
   `RRRGD_model` in `utils/RRRGD.py`. The L-BFGS fit and the cross-validation
   (70/30 splits, seeds 42 + split, R² on held-out trials) are
   `train_model_hyper_selection` in `utils/RRRGD_main_CV.py`, called with the
@@ -63,11 +63,11 @@ would change.
   `step2_train_RRR.py`. R² per neuron, un-z-scored and clipped at 0:
   `compute_R2_RRRGD` in `utils/RRRGD.py` and `compute_R2_main` in
   `utils/utils.py`.
-- Step 4: the null model's R² is `trial_avg_r2` in
+- Profiles: the null model's R² is `trial_avg_r2` in
   `utils/analyze_perf_utils.py`, called from `step3_save_trainedRRR_2_df.py`,
   which also builds their per-neuron table (`RRR_r2`, `null_r2`, `RRR_beta`).
   The delta R² > 0.015 selection is in `Fig2_globally_structured_brain/Fig2c.py`.
-- Step 5: `Fig2_globally_structured_brain/Fig2c.py` (cortical neurons with
+- Area selectivity (Fig. 2c): `Fig2_globally_structured_brain/Fig2c.py` (cortical neurons with
   delta R² > 0.015, areas with at least 30, alpha = sum over time of |beta|,
   area mean, z-score per variable across areas, the area order, top 3 marked).
 
@@ -81,5 +81,5 @@ Implementation differences that give the same results:
   accumulation), so the fit fits in 16 GB of memory. Same gradients, same fit.
 - After choosing the hyperparameters they refit the 3 splits under new file
   names; with fixed hyperparameters we need each split only once.
-- The time axis is defined once in step 1 and saved with the data; later
-  steps read it from there.
+- The time axis is defined once in the sessions stage and saved with the
+  data; later stages read it from there.

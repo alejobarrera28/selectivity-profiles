@@ -9,7 +9,7 @@ and what to compare our results against.
 - Neurons: we only have "good units" (IBL's best-quality neurons), while the
   authors used every neuron firing between 0.5 and 50 Hz. In the authors'
   sessions that's about 5,800 cortical candidates instead of 39,000; after
-  step 1 we have 4,233 cortical neurons, while the paper reports about 14,000.
+  the sessions stage we have 4,233 cortical neurons, while the paper reports about 14,000.
   So fewer areas reach the 30 well-fit neurons needed to appear in the area
   selectivity figure (16 instead of 31). This is by far the largest difference.
 - Sessions: 172 instead of 178, because 6 are missing from the local data.
@@ -29,9 +29,9 @@ and what to compare our results against.
   3-6 and lambda (ridge penalty) from 25, 75 and 200 by cross-validation. We
   fix d = 5, the best value reported in the paper, and lambda = 75, the middle
   of their grid (the paper doesn't report which lambda won). lambda shrinks all
-  coefficients; step 5 z-scores each variable across areas, so a shrinkage
+  coefficients; Fig. 2c z-scores each variable across areas, so a shrinkage
   that affects all areas alike mostly cancels out, but it can change which
-  neurons pass step 4's threshold.
+  neurons pass the profiles' threshold.
 
 Implementation differences that don't change results are listed in
 [sources.md](sources.md) (the baseline added explicitly instead of through a
@@ -44,7 +44,7 @@ These come from the authors' method, which we copy on purpose.
 
 - The model is instantaneous: a neuron's activity at time t is explained by
   the variables at the same time t. A neuron that fires 50 ms before the wheel
-  moves is only captured because the wheel trace is shifted first (step 2).
+  moves is only captured because the wheel trace is shifted first (inputs).
   The paper acknowledges that their model, unlike GLMs, can't use inputs from
   neighbouring time steps, and says it "could be incorporated in future
   extensions" (Methods, "Comparison to previous regression models").
@@ -57,7 +57,7 @@ These come from the authors' method, which we copy on purpose.
   hundred ms and the spikes are smoothed). A probe crosses several areas, so
   this can bias the comparison between areas. The paper doesn't discuss it.
 - The shift range is +-100 ms (set by the authors' behaviour window, not
-  mentioned in the paper), and many sessions want more (step 2 results).
+  mentioned in the paper), and many sessions want more (inputs results).
 - The selectivity alpha = sum over time of |beta(t)| has a noise floor:
   coefficients estimated from noisy data are never exactly 0, so even a
   neuron that doesn't care about a variable gets a positive alpha. Z-scoring
@@ -67,8 +67,8 @@ These come from the authors' method, which we copy on purpose.
   authors' code corrects for it.
 
 Possible sensitivity tests: a best shift per neuron (how much they spread
-within a session); a wider shift range (needs a wider behaviour window in step
-1); lambda = 25 and 200; subtracting each area's alpha with the variable
+within a session); a wider shift range (needs a wider behaviour window in the
+sessions stage); lambda = 25 and 200; subtracting each area's alpha with the variable
 shuffled across trials.
 
 ## What to compare our results against
@@ -100,6 +100,6 @@ shuffled across trials.
   per-neuron `RRR_r2` and `null_r2` in the authors' pre-trained model would
   tell.
 - Why the cross-validation splits are stratified only by block and contrast
-  (stated in the paper, not justified; see [pipeline.md](pipeline.md), step 3).
+  (stated in the paper, not justified; see [pipeline.md](pipeline.md), the model).
 - Whether the lead/lag compromise of the single shift per session explains
   our whisker differences in the area selectivity figure.

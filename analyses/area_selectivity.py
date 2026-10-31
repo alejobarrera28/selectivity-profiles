@@ -1,36 +1,31 @@
-"""Step 5: the average selectivity of each cortical area to each variable (the paper's Fig. 2c).
+"""The average selectivity of each cortical area to each variable (the paper's Fig. 2c).
 
-For each selected cortical neuron (step 4), its selectivity to each variable is
-alpha = sum over time of |beta(t)| (paper Methods, "Computing the selectivity
-profiles"). Areas with enough selected neurons are kept; alpha is averaged per
-area and z-scored across areas, separately for each variable. Same as the
-authors' Fig2_globally_structured_brain/Fig2c.py.
+For each selected cortical neuron, its selectivity alpha to each variable
+(pipeline.profiles.alpha). Areas with enough selected neurons are kept; alpha
+is averaged per area and z-scored across areas, separately for each variable.
+Same as the authors' Fig2_globally_structured_brain/Fig2c.py.
 
-Output: the figure and its values in outputs/results/.
+Run from the repo root: python -m analyses.area_selectivity <dataset>
+Output: the figure and its values, in outputs/<dataset>/results/.
 """
-from pathlib import Path
+import sys
 
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 
-# ---- Data location
-NEURONS_DIR = "outputs/neurons"  # step 4's output
-
-# ---- Outputs
-RESULTS_DIR = "outputs/results"  # figure and its values (kept in the repo)
+from pipeline.inputs import VARIABLES
+from pipeline.profiles import alpha
 
 # ---- Areas
 # The 43 cortical areas, in the paper's hierarchy order (authors' data/area_list.csv).
-CORTICAL_AREAS = pd.read_csv("data/area_list.csv", header=None)[0].tolist()
-MIN_NEURONS = 30  # authors' Fig2c.py: areas with fewer selected neurons are not shown
+CORTICAL_AREAS = "data/area_list.csv"
+MIN_NEURONS_PER_AREA = 30  # authors' Fig2c.py: areas with fewer selected neurons are not shown
 # Top to bottom of the figure: the authors group the areas by family, in this order,
 # and then reverse it (Fig2c.py). Areas in none of these families go last, before reversing.
 AREA_FAMILIES = [("SS",), ("VIS",), ("AUD", "GU"), ("RSP",), ("AI",)]
 
-# ---- Variables
-# Same order as beta's variable axis (step 2's VARIABLES).
-VARIABLES = ["block", "side", "contrast", "choice", "outcome", "wheel", "whisker", "lick"]
+# ---- Figure
 N_TOP = 3  # mark the 3 most selective areas of each variable (paper's triangles)
 
 
@@ -45,17 +40,17 @@ def area_order(areas):
     return ordered[::-1]
 
 
-def area_selectivity(table, beta):
+def area_selectivity(table, beta, cortical_areas):
     """Mean |selectivity| of each area to each variable, z-scored across areas.
 
-    `table` and `beta` are step 4's outputs. Returns a DataFrame (areas x
-    variables) and the number of selected neurons per area.
+    `table` and `beta` are the profiles (checkpoint 4); `cortical_areas` in
+    hierarchy order. Returns a DataFrame (areas x variables) and the number of
+    selected neurons per area.
     """
-    alpha = np.abs(beta).sum(axis=2)  # (neurons, variables): sum over time of |beta(t)|
-    keep = (table.selected & table.area.isin(CORTICAL_AREAS)).to_numpy()
+    keep = (table.selected & table.area.isin(cortical_areas)).to_numpy()
     counts = table[keep].area.value_counts()
-    areas = [a for a in CORTICAL_AREAS if counts.get(a, 0) >= MIN_NEURONS]  # hierarchy order
-    mean = pd.DataFrame(alpha[keep], columns=VARIABLES).groupby(table[keep].area.to_numpy()).mean()
+    areas = [a for a in cortical_areas if counts.get(a, 0) >= MIN_NEURONS_PER_AREA]  # hierarchy order
+    mean = pd.DataFrame(alpha(beta[keep]), columns=VARIABLES).groupby(table[keep].area.to_numpy()).mean()
     mean = mean.loc[area_order(areas)]
     zscored = (mean - mean.mean()) / mean.std(ddof=0)  # per variable (column), across areas
     return zscored, counts.loc[mean.index]
@@ -83,17 +78,19 @@ def plot_area_selectivity(zscored, path):
 # ================================================================ main
 
 if __name__ == "__main__":
-    # 1. Step 4's per-neuron table and coefficients.
-    table = pd.read_csv(f"{NEURONS_DIR}/table.csv")
-    beta = np.load(f"{NEURONS_DIR}/beta.npy")
+    out = f"outputs/{sys.argv[1]}"
+
+    # 1. The profiles' per-neuron table and coefficients, and the cortical areas.
+    table = pd.read_csv(f"{out}/profiles/table.csv")
+    beta = np.load(f"{out}/profiles/beta.npy")
+    cortical_areas = pd.read_csv(CORTICAL_AREAS, header=None)[0].tolist()
 
     # 2. Mean selectivity per area, z-scored across areas.
-    zscored, counts = area_selectivity(table, beta)
+    zscored, counts = area_selectivity(table, beta, cortical_areas)
 
     # 3. Save the values and the figure.
-    Path(RESULTS_DIR).mkdir(parents=True, exist_ok=True)
-    zscored.assign(selected_neurons=counts).to_csv(f"{RESULTS_DIR}/step5_area_selectivity.csv")
-    plot_area_selectivity(zscored, f"{RESULTS_DIR}/step5_area_selectivity.png")
+    zscored.assign(selected_neurons=counts).to_csv(f"{out}/results/area_selectivity.csv")
+    plot_area_selectivity(zscored, f"{out}/results/area_selectivity.png")
     print(f"Area selectivity: {len(zscored)} areas, {counts.sum()} selected cortical neurons.")
     for variable in VARIABLES:
         top = zscored[variable].nlargest(N_TOP).index
