@@ -1,4 +1,4 @@
-"""Checkpoint 1: turn each session's raw IBL data into model-ready arrays.
+"""The sessions stage: turn each session's raw IBL data into model-ready arrays.
 
 For each session, three functions turn the raw data (from pipeline.ibl) into
 what the model needs:

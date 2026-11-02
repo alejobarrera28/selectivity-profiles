@@ -44,7 +44,7 @@ def area_order(areas):
 def area_selectivity(table, beta, cortical_areas):
     """Mean |selectivity| of each area to each variable, z-scored across areas.
 
-    `table` and `beta` are the profiles (checkpoint 4); `cortical_areas` in
+    `table` and `beta` are the profiles stage's output; `cortical_areas` in
     hierarchy order. Returns a DataFrame (areas x variables) and the number of
     selected neurons per area.
     """

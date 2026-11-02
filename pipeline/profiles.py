@@ -1,4 +1,4 @@
-"""Checkpoint 4: every neuron's goodness of fit and selectivity profile.
+"""The profiles stage: every neuron's goodness of fit and selectivity profile.
 
 For each neuron:
   - the RRR's test R², averaged over the cross-validation splits;
@@ -38,8 +38,9 @@ def null_r2(session):
 def neuron_table(data, split_r2):
     """One row per neuron: its session, probe, cluster, area, R², delta R² and selection.
 
-    `data` maps each session id to its inputs (checkpoint 2); `split_r2` is the
-    list of {eid: test R² per neuron}, one per split (checkpoint 3).
+    `data` maps each session id to its inputs (the inputs stage's files);
+    `split_r2` is the list of {eid: test R² per neuron}, one per split (the
+    model stage's split fits).
     """
     table = pd.concat([pd.DataFrame({
         "eid": eid, "pid": session["pid"], "cluster_id": session["cluster_id"],

@@ -1,4 +1,4 @@
-"""Checkpoint 2: turn each session from checkpoint 1 into the model's inputs (X) and targets (y).
+"""The inputs stage: turn each session into the model's inputs (X) and targets (y).
 
 For each session, two functions build what the RRR model is fitted on:
   prepare_targets -> y: smoothed spike counts, z-scored per neuron and time bin
@@ -101,7 +101,7 @@ def _best_shift(trace, spikes):
 def prepare_inputs(session, spikes):
     """X: the 8 variables at every trial and time bin, z-scored.
 
-    `session` holds a session's trial columns and movement traces (checkpoint 1).
+    `session` holds a session's trial columns and movement traces (from the sessions stage).
     Task variables are constant within a trial. Movement traces are shifted by
     their best shift (_best_shift) and cut to the neural time bins. Every
     variable is then z-scored per time bin, so that the coefficients are

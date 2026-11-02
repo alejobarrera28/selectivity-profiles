@@ -10,7 +10,7 @@ below are for the `agent` dataset (the IBL agent's download). Differences from
 Posani-Wang are listed in [differences.md](differences.md); where each rule
 comes from, in [sources.md](sources.md).
 
-## Checkpoint 1: sessions
+## Sessions
 
 `pipeline/sessions.py` (with the raw data read by `pipeline/ibl.py`) goes
 through the dataset's sessions and, for each one:
@@ -59,9 +59,9 @@ Validation: on one session (875c1e5c), Posani-Wang's trial and neuron selection
 (`filter_trials_func`, `_read_Xy`) gives the same 535 trials and the same 48
 neurons as ours.
 
-## Checkpoint 2: inputs
+## Inputs
 
-`pipeline/inputs.py` turns each session from checkpoint 1 into what the model
+`pipeline/inputs.py` turns each session from the sessions stage into what the model
 is fitted on:
 
 - Targets, y (`prepare_targets`; Posani-Wang Methods, "Target variables", eq. 1):
@@ -112,7 +112,7 @@ Each session is saved to `outputs/<dataset>/inputs/<eid>.npz`:
 - `wheel_cross_corr`, `whisker_cross_corr`, `lick_cross_corr`: each
   movement's cross-correlation for every shift (for the check figure).
 - `variables`, `area`, `pid`, `cluster_id`, `dt`, `neural_start`: names of
-  X's columns, the neuron table and the time axis, passed on from checkpoint 1.
+  X's columns, the neuron table and the time axis, passed on from the sessions stage.
 
 Results: the chosen shifts (`results/shifts.csv`,
 `results/movement_shifts.png`) make sense: neurons tend to fire before the wheel moves
@@ -130,7 +130,7 @@ Validation: on 5 sessions, against Posani-Wang's `find_bestdelay_byCC` and
 `_read_Xy`: y is identical, X equal to within 3e-7 (rounding), and every chosen
 shift is the same.
 
-## Checkpoint 3: the RRR model
+## Model
 
 `pipeline/rrr.py` fits the encoding model to all neurons of all sessions at
 once.
@@ -175,7 +175,7 @@ once.
   average response over time). So on spike counts the average response also
   counts as explained, and R² is higher than on z-scored data. We use spike
   counts because Posani-Wang's goodness of fit and its threshold on R² minus the
-  average-response model's R² (checkpoint 4) are defined on firing rates.
+  average-response model's R² (the profiles) are defined on firing rates.
 
 Output, in `outputs/<dataset>/model/`:
 
@@ -209,12 +209,12 @@ Posani-Wang's `RRRGD_model`. A preliminary fit on all trials was inspected befor
 the full run (converging loss, smooth time shapes), and a reduced run (3
 sessions, 10 iterations) covered saving and resuming.
 
-## Checkpoint 4: profiles
+## Profiles
 
 `pipeline/profiles.py` decides which neurons the selectivity analyses use, and
 defines their selectivity.
 
-- R² of the RRR: each neuron's test R² from checkpoint 3, averaged over the 3 splits.
+- R² of the RRR: each neuron's test R² from the model stage, averaged over the 3 splits.
 - R² of the null model (`null_r2`; Posani-Wang Methods, eq. 8): the null model
   predicts every test trial with the average response of the training trials,
   one value per time bin, ignoring the 8 variables. It uses the same splits
@@ -259,7 +259,7 @@ does for their Fig. 2c.
   of cancelling, and makes the arbitrary sign coding of the variables
   irrelevant: alpha measures how strongly a neuron is modulated, not in which
   direction.
-- Neurons: the selected ones (checkpoint 4) in the 43 cortical areas. Areas: those
+- Neurons: the selected ones (the profiles) in the 43 cortical areas. Areas: those
   with at least 30 such neurons (Posani-Wang code).
 - Each area's alpha is averaged over its neurons and z-scored across areas,
   separately for each variable. Variables differ in how strongly they

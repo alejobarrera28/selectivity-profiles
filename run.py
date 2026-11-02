@@ -33,7 +33,7 @@ DATASETS = {
 
 
 def build_sessions(dataset, out):
-    """Checkpoint 1: for each session, its selected trials, neurons and behaviour, binned."""
+    """The sessions checkpoint: for each session, its selected trials, neurons and behaviour, binned."""
     # 1. The dataset's sessions. A few may not be in the data, so we use the ones that are.
     listed = np.load(dataset["sessions"], allow_pickle=True).astype(str)
     available = ibl.available_sessions()
@@ -95,7 +95,7 @@ def build_sessions(dataset, out):
 
 
 def build_inputs(out):
-    """Checkpoint 2: for each session, the model's targets y and inputs X."""
+    """The inputs checkpoint: for each session, the model's targets y and inputs X."""
     # 1. The sessions saved by the sessions stage.
     paths = sorted(Path(f"{out}/sessions").glob("*.npz"))
     print(f"Sessions: {len(paths)}")
@@ -145,7 +145,7 @@ def build_inputs(out):
 
 
 def _read_inputs(out):
-    """Every session's inputs (checkpoint 2), by session id. Used by the model and the profiles.
+    """Every session's inputs (the inputs checkpoint), by session id. Used by the model and the profiles.
 
     They stay in float32 to save memory; each fit converts the trials it uses
     to float64, as in the Posani-Wang code.
@@ -154,7 +154,7 @@ def _read_inputs(out):
 
 
 def fit_model(out):
-    """Checkpoint 3: the split fits (test R² per neuron) and the fit on all trials.
+    """The model checkpoint: the split fits (test R² per neuron) and the fit on all trials.
 
     Each fit is saved as soon as it is done and skipped if its file already
     exists, so an interrupted run resumes where it stopped.
@@ -187,7 +187,7 @@ def fit_model(out):
 
 
 def build_profiles(out):
-    """Checkpoint 4: one row per neuron, and its coefficients beta in the same order."""
+    """The profiles checkpoint: one row per neuron, and its coefficients beta in the same order."""
     # 1. The model's results: the per-neuron test R² of each split, and the final model.
     data = _read_inputs(out)
     splits = [np.load(f"{out}/model/split{split}.npz") for split in range(rrr.N_SPLITS)]

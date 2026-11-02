@@ -25,7 +25,7 @@ from pipeline.rrr import N_SPLITS
 def plot_signals_by_choice(session, path):
     """Trial-averaged population rate, wheel, whisker and licks, split by choice.
 
-    `session` is one session's file (checkpoint 1). If binning and alignment
+    `session` is one session's file from the sessions stage. If binning and alignment
     are right, the wheel turns in opposite directions for the two choices
     shortly after the stimulus, and licks follow the response.
     """
@@ -53,7 +53,7 @@ def plot_movement_shifts(first, summary, path):
     """Top: for one session, how well each shift lines up each movement with the neurons.
     Bottom: the shift chosen for each movement across all sessions.
 
-    `first` is one session's inputs file (checkpoint 2), `summary` the inputs
+    `first` is one session's file from the inputs stage, `summary` the inputs
     stage's table of chosen shifts.
     """
     dt = float(first["dt"])

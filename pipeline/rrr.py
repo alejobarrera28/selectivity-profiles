@@ -1,4 +1,4 @@
-"""Checkpoint 3: the reduced-rank regression (RRR) model, fitted to all sessions.
+"""The model stage: the reduced-rank regression (RRR) model, fitted to all sessions.
 
 The model (RRR) predicts each neuron's activity y from the 8 variables X, with
 time-varying coefficients built from a few time shapes shared by all neurons.
@@ -125,8 +125,8 @@ def fit(model, sessions, l2, name):
 def fit_all_trials(data):
     """Fit on all trials of every session, for the coefficients (beta).
 
-    `data` maps each session id to its inputs (checkpoint 2). Returns the
-    fitted model and its losses.
+    `data` maps each session id to its inputs (the inputs stage's files).
+    Returns the fitted model and its losses.
     """
     all_trials = _as_tensors(data, {eid: np.arange(len(d["X"])) for eid, d in data.items()})
     model = RRR(all_trials, RANK)
@@ -188,8 +188,8 @@ def test_r2(model, eid, x, y, y_mean, y_std):
 def cross_validated_r2(data, split):
     """Fit on one split's training trials; R² of each neuron on its test trials.
 
-    `data` maps each session id to its inputs (checkpoint 2). Returns
-    {eid: R² per neuron} and the fit's losses.
+    `data` maps each session id to its inputs (the inputs stage's files).
+    Returns {eid: R² per neuron} and the fit's losses.
     """
     train, test = {}, {}
     for eid, d in data.items():
