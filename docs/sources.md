@@ -78,9 +78,11 @@ Implementation differences that give the same results:
 - `_read_Xy` appends a column of ones to X, so that their model's baseline
   (`RRR_b`) is the coefficient of that column. Our model adds the baseline
   explicitly.
-- Their fit sums all sessions' losses and computes the gradient once; we
-  compute it session by session and add the gradients (gradient
-  accumulation), so the fit fits in 16 GB of memory. Same gradients, same fit.
+- Their fit sums all sessions' losses and computes the gradient once, with
+  every session in float64; we compute it session by session and add the
+  gradients (gradient accumulation), converting each session to float64 only
+  while its loss is computed, so the fit fits in 16 GB of memory. Same
+  gradients, same fit.
 - After choosing the hyperparameters they refit the 3 splits under new file
   names; with fixed hyperparameters we need each split only once.
 - The time axis is defined once in the sessions stage and saved with the

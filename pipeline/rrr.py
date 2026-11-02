@@ -42,16 +42,19 @@ class RRR(torch.nn.Module):
     is 1 std above usual, neuron n's activity is beta std above usual.
     """
 
-    def __init__(self, sessions, rank):
-        """`sessions` maps each session id to its (X, y)."""
+    def __init__(self, data, trials, rank):
+        """`data` maps each session id to its inputs (the inputs stage's files),
+        `trials` to the trials fitted.
+        """
         super().__init__()
         torch.manual_seed(0)
-        _, n_bins, n_variables = next(iter(sessions.values()))[0].shape
+        _, n_bins, n_variables = next(iter(data.values()))["X"].shape
         scale = 1 / np.sqrt(n_bins * rank)  # small random start (Posani-Wang code)
         self.V = torch.nn.Parameter(torch.randn(rank, n_bins, dtype=torch.float64) * scale)
         self.U = torch.nn.ParameterDict()
         self.b = torch.nn.ParameterDict()
-        for eid, (x, y) in sessions.items():
+        for eid in trials:
+            _, y = _session_tensors(data[eid], trials[eid])
             n_neurons = y.shape[2]
             self.U[eid] = torch.nn.Parameter(
                 torch.randn(n_neurons, n_variables, rank, dtype=torch.float64) * scale)
@@ -72,11 +75,10 @@ class RRR(torch.nn.Module):
 
 # ================================================================ fitting
 
-def _as_tensors(data, trials):
-    """{eid: trial indices} -> {eid: (X, y)} of those trials, in float64 (Posani-Wang code)."""
-    return {eid: (torch.tensor(d["X"][trials[eid]], dtype=torch.float64),
-                  torch.tensor(d["y"][trials[eid]], dtype=torch.float64))
-            for eid, d in data.items()}
+def _session_tensors(session, trials):
+    """(X, y) of one session's trials, in float64 (Posani-Wang code)."""
+    return (torch.tensor(session["X"][trials], dtype=torch.float64),
+            torch.tensor(session["y"][trials], dtype=torch.float64))
 
 
 def _session_loss(model, eid, x, y, l2):
@@ -89,11 +91,12 @@ def _session_loss(model, eid, x, y, l2):
     return error + penalty
 
 
-def fit(model, sessions, l2, name):
+def fit(model, data, trials, l2, name):
     """Fit the model to all sessions at once with L-BFGS (Posani-Wang settings).
 
-    Shows a progress bar labelled `name`. Returns the loss after every
-    evaluation, to see how the fit converged.
+    `data` maps each session id to its inputs (the inputs stage's files),
+    `trials` to the trials fitted. Shows a progress bar labelled `name`.
+    Returns the loss after every evaluation, to see how the fit converged.
     """
     optimizer = torch.optim.LBFGS(model.parameters(), lr=1, max_iter=MAX_ITER,
                                   tolerance_grad=TOLERANCE_GRAD,
@@ -107,9 +110,10 @@ def fit(model, sessions, l2, name):
         # L-BFGS calls this whenever it needs the loss and its gradient.
         optimizer.zero_grad()
         total = 0.0
-        for eid, (x, y) in sessions.items():
+        for eid in trials:
+            # Gradient accumulation: one session at a time, so only one is in memory in float64.
+            x, y = _session_tensors(data[eid], trials[eid])
             loss = _session_loss(model, eid, x, y, l2)
-            # Gradient accumulation: one session at a time, so only one is in memory.
             loss.backward()
             total += loss.item()
         losses.append(total)
@@ -128,9 +132,9 @@ def fit_all_trials(data):
     `data` maps each session id to its inputs (the inputs stage's files).
     Returns the fitted model and its losses.
     """
-    all_trials = _as_tensors(data, {eid: np.arange(len(d["X"])) for eid, d in data.items()})
-    model = RRR(all_trials, RANK)
-    losses = fit(model, all_trials, L2, name="final fit (all trials)")
+    all_trials = {eid: np.arange(len(d["X"])) for eid, d in data.items()}
+    model = RRR(data, all_trials, RANK)
+    losses = fit(model, data, all_trials, L2, name="final fit (all trials)")
     return model, losses
 
 
@@ -194,11 +198,9 @@ def cross_validated_r2(data, split):
     train, test = {}, {}
     for eid, d in data.items():
         train[eid], test[eid] = split_trials(d["X"], d["variables"], split)
-    training = _as_tensors(data, train)
-    model = RRR(training, RANK)
-    losses = fit(model, training, L2, name=f"split {split + 1}/{N_SPLITS}")
-    del training  # free the memory before the next fit
-    r2 = {eid: test_r2(model, eid, torch.tensor(d["X"][test[eid]], dtype=torch.float64),
+    model = RRR(data, train, RANK)
+    losses = fit(model, data, train, L2, name=f"split {split + 1}/{N_SPLITS}")
+    r2 ={eid: test_r2(model, eid, torch.tensor(d["X"][test[eid]], dtype=torch.float64),
                        d["y"][test[eid]], d["y_mean"], d["y_std"])
           for eid, d in data.items()}
     return r2, losses
