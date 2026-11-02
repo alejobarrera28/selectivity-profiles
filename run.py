@@ -144,13 +144,14 @@ def build_inputs(out):
           + ", ".join(f"{name} {summary[f'{name}_search_failed'].sum()}" for name in inputs.MOVEMENTS))
 
 
-def _read_inputs(out):
+def _open_inputs(out):
     """Every session's inputs (the inputs checkpoint), by session id. Used by the model and the profiles.
 
-    They stay in float32 to save memory; each fit converts the trials it uses
-    to float64, as in the Posani-Wang code.
+    The files are opened, not read: each array is read from disk when it is
+    used, so only one session is in memory at a time. Each fit converts the
+    trials it uses to float64, as in the Posani-Wang code.
     """
-    return {path.stem: dict(np.load(path)) for path in sorted(Path(f"{out}/inputs").glob("*.npz"))}
+    return {path.stem: np.load(path) for path in sorted(Path(f"{out}/inputs").glob("*.npz"))}
 
 
 def fit_model(out):
@@ -160,7 +161,7 @@ def fit_model(out):
     exists, so an interrupted run resumes where it stopped.
     """
     # 1. Every session's inputs.
-    data = _read_inputs(out)
+    data = _open_inputs(out)
     print(f"Sessions: {len(data)}, neurons: {sum(d['y'].shape[2] for d in data.values())}")
     Path(f"{out}/model").mkdir(exist_ok=True)
 
@@ -189,7 +190,7 @@ def fit_model(out):
 def build_profiles(out):
     """The profiles checkpoint: one row per neuron, and its coefficients beta in the same order."""
     # 1. The model's results: the per-neuron test R² of each split, and the final model.
-    data = _read_inputs(out)
+    data = _open_inputs(out)
     splits = [np.load(f"{out}/model/split{split}.npz") for split in range(rrr.N_SPLITS)]
     final = np.load(f"{out}/model/all_trials.npz")
 
