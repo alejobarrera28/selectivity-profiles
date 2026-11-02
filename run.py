@@ -7,8 +7,9 @@ Four stages, each saving a checkpoint in outputs/<dataset>/ that the next one re
   profiles  one row per neuron (area, R², selection) and its coefficients    (pipeline.profiles)
 A stage whose output already exists is skipped; the sessions and the model's
 fits are checked one by one, so an interrupted run resumes where it stopped.
-Delete a stage's folder to redo it. The sessions and inputs stages also write a
-summary table to outputs/<dataset>/results/.
+Delete a stage's folder to redo it. Each stage that runs also draws its check
+figure (analyses/checks.py), and the sessions and inputs stages write a summary
+table, all in outputs/<dataset>/results/pipeline/.
 
 What goes into the pipeline is a dataset, defined in DATASETS: its data
 parameters (which sessions, IBL's data as of which date, which units, and the
@@ -23,7 +24,11 @@ from pathlib import Path
 import numpy as np
 import pandas as pd
 
+from analyses import checks
 from pipeline import ibl, inputs, profiles, rrr, sessions
+
+# ---- Outputs: the stages' summary tables and check figures, within outputs/<dataset>/
+RESULTS = "results/pipeline"
 
 # ---- Datasets: what goes into the pipeline, by name
 # as_of: for each IBL file, its last revision dated on or before that date.
@@ -117,7 +122,7 @@ def build_sessions(dataset, out):
 
     # 3. Summary of the whole stage, also saved as a table.
     summary = pd.DataFrame(summary)
-    summary.to_csv(f"{out}/results/sessions.csv", index=False)
+    summary.to_csv(f"{out}/{RESULTS}/sessions.csv", index=False)
     saved = summary[summary.status == "saved"]
     print(f"\nSaved {len(saved)} of {len(eids)} sessions: {saved.trials.sum():.0f} trials, "
           f"{saved.neurons.sum():.0f} neurons. "
@@ -170,7 +175,7 @@ def build_inputs(out):
 
     # 3. Summary of the whole stage, also saved as a table.
     summary = pd.DataFrame(summary)
-    summary.to_csv(f"{out}/results/shifts.csv", index=False)
+    summary.to_csv(f"{out}/{RESULTS}/shifts.csv", index=False)
     print(f"\nPreprocessed {len(summary)} sessions. Failed shift searches (no shift used): "
           + ", ".join(f"{name} {summary[f'{name}_search_failed'].sum()}" for name in inputs.MOVEMENTS))
 
@@ -245,16 +250,18 @@ if __name__ == "__main__":
     dataset = DATASETS[name]
     print(f"Dataset {name}: {dataset['description']}")
     out = f"outputs/{name}"
-    Path(f"{out}/results").mkdir(parents=True, exist_ok=True)
+    Path(f"{out}/{RESULTS}").mkdir(parents=True, exist_ok=True)
 
-    # Each stage, unless its checkpoint exists (the sessions and the model check each file themselves).
-    stages = [("sessions", lambda: build_sessions(dataset, out)),
-              ("inputs", lambda: build_inputs(out)),
-              ("model", lambda: fit_model(out)),
-              ("profiles", lambda: build_profiles(out))]
-    for stage, run in stages:
+    # Each stage, unless its checkpoint exists (the sessions and the model check
+    # each file themselves), then its check figure.
+    stages = [("sessions", lambda: build_sessions(dataset, out), checks.check_sessions),
+              ("inputs", lambda: build_inputs(out), checks.check_inputs),
+              ("model", lambda: fit_model(out), checks.check_model),
+              ("profiles", lambda: build_profiles(out), checks.check_profiles)]
+    for stage, run, check in stages:
         if stage not in ("sessions", "model") and Path(f"{out}/{stage}").exists():
             print(f"\n== {stage}: already in {out}/{stage}/, skipped")
             continue
         print(f"\n== {stage}")
         run()
+        check(out, f"{out}/{RESULTS}")

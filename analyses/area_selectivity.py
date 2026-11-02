@@ -6,9 +6,10 @@ is averaged per area and z-scored across areas, separately for each variable.
 Same as the Posani-Wang code (Fig2_globally_structured_brain/Fig2c.py).
 
 Run from the repo root: python -m analyses.area_selectivity <dataset>
-Output: the figure and its values, in outputs/<dataset>/results/.
+Output: the figure and its values, in outputs/<dataset>/results/area_selectivity/.
 """
 import sys
+from pathlib import Path
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -80,6 +81,8 @@ def plot_area_selectivity(zscored, path):
 
 if __name__ == "__main__":
     out = f"outputs/{sys.argv[1]}"
+    results = f"{out}/results/area_selectivity"
+    Path(results).mkdir(parents=True, exist_ok=True)
 
     # 1. The profiles' per-neuron table and coefficients, and the cortical areas.
     table = pd.read_csv(f"{out}/profiles/table.csv")
@@ -90,8 +93,8 @@ if __name__ == "__main__":
     zscored, counts = area_selectivity(table, beta, cortical_areas)
 
     # 3. Save the values and the figure.
-    zscored.assign(selected_neurons=counts).to_csv(f"{out}/results/area_selectivity.csv")
-    plot_area_selectivity(zscored, f"{out}/results/area_selectivity.png")
+    zscored.assign(selected_neurons=counts).to_csv(f"{results}/area_selectivity.csv")
+    plot_area_selectivity(zscored, f"{results}/area_selectivity.png")
     print(f"Area selectivity: {len(zscored)} areas, {counts.sum()} selected cortical neurons.")
     for variable in VARIABLES:
         top = zscored[variable].nlargest(N_TOP).index

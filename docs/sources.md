@@ -109,3 +109,8 @@ Implementation differences that give the same results:
   names; with fixed hyperparameters we need each split only once.
 - The time axis is defined once in the sessions stage and saved with the
   data; later stages read it from there.
+- Their download (`load_data_from_pid` in `utils/download_data.py`, called
+  with `min_neurons=10`) also skips sessions with fewer than 10 neurons firing
+  at 0.5-50 Hz, before the other neuron rules. We don't copy it: their sessions
+  all pass it by construction (they are the ones it kept), and with good units
+  only, every one of their sessions that has data has more than 10 such neurons.

@@ -5,8 +5,10 @@
   fit                model: the final fit's loss and time shapes, and the test R²
   r2_vs_null         profiles: R² of the RRR against the null model, and delta R²
 
-Run from the repo root: python -m analyses.checks <dataset>
-Output: the figures, in outputs/<dataset>/results/.
+run.py draws each one as soon as its stage is done (check_sessions, ...). To
+redraw them all, run from the repo root: python -m analyses.checks <dataset>
+Output: the figures, in outputs/<dataset>/results/pipeline/, next to run.py's
+summary tables.
 """
 import sys
 from pathlib import Path
@@ -47,6 +49,13 @@ def plot_signals_by_choice(session, path):
     plt.close(fig)
 
 
+def check_sessions(out, results):
+    """The signals by choice of the first session kept (`out`: the dataset's outputs folder)."""
+    kept = pd.read_csv(f"{results}/sessions.csv").query("status == 'saved'")
+    plot_signals_by_choice(np.load(f"{out}/sessions/{kept.eid.iloc[0]}.npz"),
+                           f"{results}/signals_by_choice.png")
+
+
 # ================================================================ inputs
 
 def plot_movement_shifts(first, summary, path):
@@ -73,6 +82,13 @@ def plot_movement_shifts(first, summary, path):
     fig.tight_layout()
     fig.savefig(path, dpi=120)
     plt.close(fig)
+
+
+def check_inputs(out, results):
+    """The first session's shift curves, and every session's chosen shifts."""
+    first = np.load(sorted(Path(f"{out}/inputs").glob("*.npz"))[0])
+    plot_movement_shifts(first, pd.read_csv(f"{results}/shifts.csv"),
+                         f"{results}/movement_shifts.png")
 
 
 # ================================================================ model
@@ -103,6 +119,14 @@ def plot_fit(final, splits, dt, neural_start, path):
     plt.close(fig)
 
 
+def check_model(out, results):
+    """The split fits and the final fit (time axis from the inputs)."""
+    first = np.load(sorted(Path(f"{out}/inputs").glob("*.npz"))[0])
+    splits = [np.load(f"{out}/model/split{split}.npz") for split in range(N_SPLITS)]
+    plot_fit(np.load(f"{out}/model/all_trials.npz"), splits,
+             float(first["dt"]), float(first["neural_start"]), f"{results}/fit.png")
+
+
 # ================================================================ profiles
 
 def plot_r2_vs_null(table, path):
@@ -128,27 +152,18 @@ def plot_r2_vs_null(table, path):
     plt.close(fig)
 
 
+def check_profiles(out, results):
+    """The per-neuron table's R², against the null model's."""
+    plot_r2_vs_null(pd.read_csv(f"{out}/profiles/table.csv"), f"{results}/r2_vs_null.png")
+
+
 # ================================================================ main
 
 if __name__ == "__main__":
     out = f"outputs/{sys.argv[1]}"
-    results = f"{out}/results"
+    results = f"{out}/results/pipeline"
 
-    # 1. Sessions: the first session that was kept.
-    kept = pd.read_csv(f"{results}/sessions.csv").query("status == 'saved'")
-    plot_signals_by_choice(np.load(f"{out}/sessions/{kept.eid.iloc[0]}.npz"),
-                           f"{results}/signals_by_choice.png")
-
-    # 2. Inputs: the first session's shift curves, and every session's chosen shifts.
-    first = np.load(sorted(Path(f"{out}/inputs").glob("*.npz"))[0])
-    plot_movement_shifts(first, pd.read_csv(f"{results}/shifts.csv"),
-                         f"{results}/movement_shifts.png")
-
-    # 3. Model: the split fits and the final fit (time axis from the inputs).
-    splits = [np.load(f"{out}/model/split{split}.npz") for split in range(N_SPLITS)]
-    plot_fit(np.load(f"{out}/model/all_trials.npz"), splits,
-             float(first["dt"]), float(first["neural_start"]), f"{results}/fit.png")
-
-    # 4. Profiles: the per-neuron table.
-    plot_r2_vs_null(pd.read_csv(f"{out}/profiles/table.csv"), f"{results}/r2_vs_null.png")
+    # Every check, from the checkpoints already saved.
+    for check in (check_sessions, check_inputs, check_model, check_profiles):
+        check(out, results)
     print(f"Check figures saved in {results}/")

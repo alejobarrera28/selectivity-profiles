@@ -2,10 +2,12 @@
 
 `run.py <dataset>` runs four stages in order, each with its module in
 `pipeline/`. Each stage reads the previous stage's checkpoint and writes its
-own to `outputs/<dataset>/`; a stage whose checkpoint exists is skipped. The
-analyses in `analyses/` read the checkpoints: `checks.py` makes the figures
-shown below for each stage, and `area_selectivity.py` the mean
-selectivity per area. Figures and tables go to `outputs/<dataset>/results/`. The results
+own to `outputs/<dataset>/`; a stage whose checkpoint exists is skipped. As
+each stage ends, `run.py` draws its check figure (`analyses/checks.py`), shown
+below, and puts it with the stages' summary tables in
+`outputs/<dataset>/results/pipeline/`. The analyses in `analyses/` read the
+checkpoints and write to a folder of their own in `outputs/<dataset>/results/`:
+`area_selectivity.py`, the mean selectivity per area. The results
 below are for the `agent` dataset (the IBL agent's download). Differences from
 Posani-Wang are listed in [differences.md](differences.md); where each rule
 comes from, in [sources.md](sources.md).
@@ -50,7 +52,7 @@ Each session is saved to `outputs/<dataset>/sessions/<eid>.npz`, with raw values
 
 Results: 170 of the 172 sessions pass (2 have fewer than 100 trials), with
 60,528 trials and 19,728 neurons, of which 4,233 are in cortex. The first
-session's signals averaged by choice (`results/signals_by_choice.png`) look as
+session's signals averaged by choice (`results/pipeline/signals_by_choice.png`) look as
 expected: the wheel turns in opposite directions for the two choices shortly
 after the stimulus, and licks follow the response. numpy prints one harmless
 warning: in a few sessions one camera never tracks a tongue tip reliably, so
@@ -117,8 +119,8 @@ Each session is saved to `outputs/<dataset>/inputs/<eid>.npz`:
 - `variables`, `area`, `pid`, `cluster_id`, `uuid`, `dt`, `neural_start`: names of
   X's columns, the neuron table and the time axis, passed on from the sessions stage.
 
-Results: the chosen shifts (`results/shifts.csv`,
-`results/movement_shifts.png`) make sense: neurons tend to fire before the wheel moves
+Results: the chosen shifts (`results/pipeline/shifts.csv`,
+`results/pipeline/movement_shifts.png`) make sense: neurons tend to fire before the wheel moves
 (median +50 ms, motor commands) and after the whiskers move (median -30 ms,
 sensing the movement). The shift search fails in 37 sessions for the wheel, 27
 for whisker and 19 for lick, and these failures continue the same trends:
@@ -194,7 +196,7 @@ interrupted run resumes where it stopped (delete `outputs/<dataset>/model/` to s
 
 Results: about 1 hour on a 16 GB M3 laptop. Every fit converged long before
 the 1000-iteration limit (205 to 358 evaluations). The 5 learned shapes
-(`results/fit.png`) are smooth and follow the task's timeline:
+(`results/pipeline/fit.png`) are smooth and follow the task's timeline:
 flat before the stimulus, with features around the stimulus response
 (~0.1 s), the movement (~0.2-0.3 s) and after the response (~0.4 s and
 later). Nothing in the model forces them to be smooth: each time bin of V is
@@ -237,7 +239,7 @@ Output, in `outputs/<dataset>/profiles/`:
   (neurons, 8 variables, 100 time bins), in the same row order as the table.
 
 Results: almost every neuron is predicted better by the RRR than by the null
-model (`results/r2_vs_null.png`). 8,335 of the 19,728 neurons are selected; in
+model (`results/pipeline/r2_vs_null.png`). 8,335 of the 19,728 neurons are selected; in
 cortex, 1,739 of 4,233 (41%; Posani-Wang: 4,617 of about 14,000, 33%). 16
 cortical areas have at least 30 selected neurons, the minimum to appear in the
 area selectivity figure (Posani-Wang's Fig. 2c shows 31): ACAd, AId, AUDp, MOp,
@@ -276,7 +278,7 @@ does for their Fig. 2c.
   of each variable are marked with triangles, as in the published figure (the
   Posani-Wang code uses "*").
 
-Output, in `outputs/<dataset>/results/`: `area_selectivity.png`, and
+Output, in `outputs/<dataset>/results/area_selectivity/`: `area_selectivity.png`, and
 `area_selectivity.csv` with the z-scored values and each area's number of
 selected neurons.
 

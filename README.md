@@ -32,7 +32,6 @@ Create the environment once, from this folder:
 Then, with the environment active:
 
     caffeinate -i python run.py mine            # the pipeline (macOS: caffeinate keeps the Mac awake)
-    python -m analyses.checks mine              # check figures for each stage
     python -m analyses.area_selectivity mine    # mean selectivity per area
 
 `mine` is a dataset, defined in `run.py`: which sessions, IBL's data as of
@@ -40,7 +39,8 @@ which date, and which units. `shuqi` is Posani-Wang's data. Reading the data
 takes a few hours and fitting the model about an hour per dataset. A stage
 whose output exists is skipped, and the sessions and the model's fits are
 saved one by one, so running it again after an interruption resumes where it
-left off. Figures and tables go to `outputs/<dataset>/results/`, which is kept
-in the repo.
+left off. Figures and tables, kept in the repo, go to
+`outputs/<dataset>/results/`: the pipeline's summaries and a check figure for
+each stage to `pipeline/`, and each analysis's to a folder of its own.
 
 `requirements.txt` pins the versions the results were produced with.

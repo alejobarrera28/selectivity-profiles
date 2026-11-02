@@ -22,7 +22,7 @@ and what to compare our results against.
 - Minimum of 100 trials per session: we count the trials left after all
   selection rules. The Posani-Wang code counts before removing the 50/50 block,
   which looks like an accident (the model is only fitted on the trials left
-  after it). This drops 2 sessions they would keep (about 20 cortical neurons).
+  after it). This drops 3 of their sessions.
 - Wheel velocity: the Posani-Wang code filters the wheel position trial by trial; we
   filter the whole session at once with the same filter, which avoids edge
   effects at the start and end of each trial. Small difference.

@@ -28,7 +28,10 @@ Posani-Wang paper or code, or to a recorded decision of ours.
   written, except `pipeline/ibl.py`, which reads the raw IBL data. All reading
   and writing of checkpoints is in `run.py`.
 - Figures and analyses are scripts in `analyses/` (`python -m analyses.<name>
-  <dataset>`) that read the checkpoints and write to `outputs/<dataset>/results/`.
+  <dataset>`) that read the checkpoints and write to a folder of their own,
+  `outputs/<dataset>/results/<name>/`. The check figure of each stage
+  (`analyses/checks.py`) is drawn by `run.py` as the stage ends, and goes with
+  the stages' summary tables to `outputs/<dataset>/results/pipeline/`.
 - Every file in the repo is either written by hand on purpose or produced by
   the code. No files from hand-run commands. Of `outputs/`, only each dataset's
   `results/` (figures and tables) is committed.
