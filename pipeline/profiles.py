@@ -14,7 +14,7 @@ import pandas as pd
 from pipeline.rrr import N_SPLITS, r2_spike_counts, split_trials
 
 # ---- Selection
-# Authors' Fig2c.py keeps neurons with delta R² > 0.015 (the paper's Methods say >= 0.015).
+# The Posani-Wang code (Fig2c.py) keeps neurons with delta R² > 0.015 (their Methods say >= 0.015).
 MIN_DELTA_R2 = 0.015
 
 
@@ -24,7 +24,7 @@ def null_r2(session):
     """Test R² of the null model for each neuron, averaged over the model's splits.
 
     The null model predicts every test trial with the average response of the
-    training trials (authors' trial_avg_r2). Same splits and same R² as the RRR.
+    training trials (Posani-Wang's trial_avg_r2). Same splits and same R² as the RRR.
     """
     r2 = []
     for split in range(N_SPLITS):
@@ -58,6 +58,6 @@ def alpha(beta):
     """Selectivity of each neuron to each variable: sum over time of |beta(t)|.
 
     `beta` is (neurons, variables, time bins); returns (neurons, variables).
-    Paper Methods, "Computing the selectivity profiles".
+    Posani-Wang Methods, "Computing the selectivity profiles".
     """
     return np.abs(beta).sum(axis=2)

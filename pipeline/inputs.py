@@ -8,16 +8,16 @@ import numpy as np
 from scipy.ndimage import gaussian_filter1d
 
 # ---- Z-scoring (y and X)
-STD_FLOOR = 1e-8  # authors' code: avoids dividing by 0 when a value never varies across trials
+STD_FLOOR = 1e-8  # Posani-Wang code: avoids dividing by 0 when a value never varies across trials
 
 # ---- Targets (y)
-SMOOTH_SD = 2  # bins (20 ms): s.d. of the Gaussian smoothing (paper Methods)
+SMOOTH_SD = 2  # bins (20 ms): s.d. of the Gaussian smoothing (Posani-Wang Methods)
 
 # ---- Inputs (X)
-# The 8 variables, in the order of Fig. 2 (paper Methods, "Input variables").
+# The 8 variables, in the order of Fig. 2 (Posani-Wang Methods, "Input variables").
 VARIABLES = ["block", "side", "contrast", "choice", "outcome", "wheel", "whisker", "lick"]
-MOVEMENTS = ["wheel", "whisker", "lick"]  # the ones shifted in time (paper Methods)
-# Contrast encoding (paper Methods): 0% -> 0, low (<= 12.5%) -> 1, high (> 12.5%) -> 4.
+MOVEMENTS = ["wheel", "whisker", "lick"]  # the ones shifted in time (Posani-Wang Methods)
+# Contrast encoding (Posani-Wang Methods): 0% -> 0, low (<= 12.5%) -> 1, high (> 12.5%) -> 4.
 LOW_CONTRAST_MAX = 0.125
 LOW_CONTRAST_CODE, HIGH_CONTRAST_CODE = 1, 4
 
@@ -41,7 +41,7 @@ def prepare_targets(spikes):
 
     `spikes` is (trials, bins, neurons). Z-scoring puts every neuron and time
     bin on the same scale, so the fit weighs them equally and the coefficients
-    can be compared across neurons (paper Methods, eq. 1).
+    can be compared across neurons (Posani-Wang Methods, eq. 1).
     Returns y, and the mean and std per (bin, neuron) needed to turn the
     model's predictions back into spike counts.
     """
@@ -54,8 +54,8 @@ def prepare_targets(spikes):
 def _task_variables(session):
     """Block, side, contrast, choice and outcome of each trial.
 
-    Encoded as in the paper's Methods ("Input variables"). For the outcome we
-    use IBL's feedbackType; the authors' code computes it as "stimulus side ==
+    Encoded as in the Posani-Wang Methods ("Input variables"). For the outcome we
+    use IBL's feedbackType; the Posani-Wang code computes it as "stimulus side ==
     choice", which gives the same value in every trial.
     """
     contrast = np.nan_to_num(session["contrastLeft"]) + np.nan_to_num(session["contrastRight"])
@@ -73,13 +73,13 @@ def _best_shift(trace, spikes):
     """Time shift that best lines up a movement trace with the neural activity.
 
     `trace` is (trials, behaviour bins), `spikes` (trials, neural bins, neurons).
-    Cross-correlation, as in the authors' find_bestdelay_byCC: for each shift
+    Cross-correlation, as in Posani-Wang's find_bestdelay_byCC: for each shift
     (within the trace's extra bins, +-100 ms), remove each trial's mean, take
     the dot product of the shifted trace with every neuron (summed over time,
     averaged over trials), and combine the neurons as sqrt(sum of squares). If
     the best shift is at the edge of the range, the search counts as failed and
-    no shift is used (authors' code). The paper's Methods only describe the
-    idea; the details follow the authors' code.
+    no shift is used (Posani-Wang code). The Posani-Wang Methods only describe
+    the idea; the details follow the Posani-Wang code.
 
     Returns the shift in bins (positive: the movement comes after the neural
     activity it best matches) and the cross-correlation for every shift.
@@ -105,7 +105,7 @@ def prepare_inputs(session, spikes):
     Task variables are constant within a trial. Movement traces are shifted by
     their best shift (_best_shift) and cut to the neural time bins. Every
     variable is then z-scored per time bin, so that the coefficients are
-    comparable across variables (paper Methods).
+    comparable across variables (Posani-Wang Methods).
     Returns X (trials, bins, 8) and, per movement, its shift and cross-correlation curve.
     """
     n_bins = spikes.shape[1]

@@ -9,17 +9,17 @@ what the model needs:
 import numpy as np
 from scipy.signal import butter, sosfiltfilt
 
-# ---- Time axis (paper Methods): -0.2 to 0.8 s around stimulus onset, 10 ms bins
+# ---- Time axis (Posani-Wang Methods): -0.2 to 0.8 s around stimulus onset, 10 ms bins
 DT = 0.01
 NEURAL_START, NEURAL_BINS = -0.2, 100
 # Behaviour gets 10 extra bins on each side (-0.3 to 0.9 s, 120 bins), so that
 # the inputs can shift each movement trace in time by up to +-100 ms to line it
-# up with the neural activity (paper Methods; the authors' code does the same).
+# up with the neural activity (Posani-Wang Methods; the Posani-Wang code does the same).
 BEHAV_START, BEHAV_BINS = -0.3, 120
 
 # ---- Trials
-MAX_REACTION_TIME = 0.8  # seconds (paper Methods, "Criteria for trial inclusion")
-MIN_TRIALS = 100         # authors' code: sessions with fewer selected trials are skipped
+MAX_REACTION_TIME = 0.8  # seconds (Posani-Wang Methods, "Criteria for trial inclusion")
+MIN_TRIALS = 100         # Posani-Wang code: sessions with fewer selected trials are skipped
 # Trial table columns kept for the inputs, which turn them into the model's task
 # variables: block (probabilityLeft), side and contrast (contrastLeft/Right),
 # choice, and outcome (feedbackType).
@@ -27,9 +27,9 @@ TRIAL_COLUMNS = ["trial_id", "probabilityLeft", "contrastLeft", "contrastRight",
                  "choice", "feedbackType"]
 
 # ---- Neurons
-MIN_FR, MAX_FR = 0.5, 50.0      # Hz (paper Methods, "Criteria for neuron inclusion")
-MAX_FRAC_SILENT_TRIALS = 0.5    # authors' code: must spike in at least half of the trials
-MIN_NEURONS_PER_SESSION = 5     # authors' code: sessions with fewer neurons are skipped
+MIN_FR, MAX_FR = 0.5, 50.0      # Hz (Posani-Wang Methods, "Criteria for neuron inclusion")
+MAX_FRAC_SILENT_TRIALS = 0.5    # Posani-Wang code: must spike in at least half of the trials
+MIN_NEURONS_PER_SESSION = 5     # Posani-Wang code: sessions with fewer neurons are skipped
 
 # ---- Behaviour
 WHEEL_FILTER_ORDER, WHEEL_CUTOFF = 8, 20  # IBL's wheel low-pass filter (order, Hz)
@@ -77,13 +77,13 @@ def prepare_trials(trials, verbose=False):
     reaction_time = trials.firstMovement_times - trials.stimOn_times
     response_time = trials.response_times - trials.stimOn_times
     rules = {
-        "made a choice": trials.choice != 0,                                                  # authors' code
-        "moved after the stimulus": reaction_time >= 0,                                       # authors' code
-        f"started moving within {MAX_REACTION_TIME} s": reaction_time < MAX_REACTION_TIME,    # paper Methods
-        f"finished response within {MAX_REACTION_TIME} s": response_time < MAX_REACTION_TIME, # authors' code
+        "made a choice": trials.choice != 0,                                                  # Posani-Wang code
+        "moved after the stimulus": reaction_time >= 0,                                       # Posani-Wang code
+        f"started moving within {MAX_REACTION_TIME} s": reaction_time < MAX_REACTION_TIME,    # Posani-Wang Methods
+        f"finished response within {MAX_REACTION_TIME} s": response_time < MAX_REACTION_TIME, # Posani-Wang code
         # The 50/50 block only occurs in the first ~90 trials of each session,
         # so it is confounded with time in the session.
-        "not in the 50/50 block": trials.probabilityLeft != 0.5,                              # paper Methods
+        "not in the 50/50 block": trials.probabilityLeft != 0.5,                              # Posani-Wang Methods
     }
     if verbose:
         _log_rules(rules, "trials")
@@ -110,15 +110,15 @@ def prepare_neurons(units, spike_times, spike_neuron, stim_times, verbose=False)
     task_rate = per_trial.mean(axis=0) / (NEURAL_BINS * DT)  # Hz
     frac_silent = (per_trial == 0).mean(axis=0)             # fraction of trials with no spikes
     rules = {
-        # Units without an area label are what the authors' atlas mapping calls
+        # Units without an area label are what the Posani-Wang atlas mapping calls
         # "root"; "y" is a fiber tract.
-        "in a real brain area":                                      # authors' code
+        "in a real brain area":                                      # Posani-Wang code
             (units.beryl_acronym.notna() & (units.beryl_acronym != "y")).to_numpy(),
-        f"session rate {MIN_FR}-{MAX_FR} Hz":                        # paper Methods
+        f"session rate {MIN_FR}-{MAX_FR} Hz":                        # Posani-Wang Methods
             units.firing_rate.between(MIN_FR, MAX_FR, inclusive="neither").to_numpy(),
-        f"task-window rate > {MIN_FR} Hz":                           # authors' code
+        f"task-window rate > {MIN_FR} Hz":                           # Posani-Wang code
             task_rate > MIN_FR,
-        f"silent in < {MAX_FRAC_SILENT_TRIALS:.0%} of trials":       # authors' code
+        f"silent in < {MAX_FRAC_SILENT_TRIALS:.0%} of trials":       # Posani-Wang code
             frac_silent < MAX_FRAC_SILENT_TRIALS,
     }
     if verbose:
@@ -131,7 +131,7 @@ def prepare_neurons(units, spike_times, spike_neuron, stim_times, verbose=False)
 
 def _sample_on_bins(t, x, stim_times):
     """Value of a continuous signal x(t) at the start of each behaviour bin:
-    (n_trials, BEHAV_BINS). Linear interpolation between samples, as the authors do.
+    (n_trials, BEHAV_BINS). Linear interpolation between samples, as the Posani-Wang code does.
     """
     bin_starts = stim_times[:, None] + BEHAV_START + DT * np.arange(BEHAV_BINS)
     return np.interp(bin_starts, t, x)
@@ -140,8 +140,8 @@ def _sample_on_bins(t, x, stim_times):
 def _wheel_velocity(t, position):
     """Wheel velocity (rad/s) from position sampled uniformly at 100 Hz.
 
-    Same as IBL's brainbox.behavior.wheel.velocity_filtered, which the authors
-    use: low-pass the position (8th-order Butterworth, 20 Hz, forwards and
+    Same as IBL's brainbox.behavior.wheel.velocity_filtered, which the
+    Posani-Wang code uses: low-pass the position (8th-order Butterworth, 20 Hz, forwards and
     backwards so there is no delay), then take the derivative.
     """
     fs = 1 / np.median(np.diff(t))
@@ -153,7 +153,7 @@ def _detect_licks(t, tongue):
     """Lick times from the tongue keypoints of one camera.
 
     Same as IBL's brainbox.behavior.dlc.get_licks, which produced the lick
-    times the authors used: ignore keypoints tracked with likelihood < 0.9, then
+    times Posani-Wang used: ignore keypoints tracked with likelihood < 0.9, then
     call a frame a lick event when any tongue coordinate jumps by more than a
     quarter of its typical frame-to-frame change (std of the differences).
     """
@@ -180,7 +180,7 @@ def prepare_behaviour(wheel, cameras, stim_times):
         t, features = camera["t"], camera["features"]
         whisker.append(_sample_on_bins(t, features.whiskerMotionEnergy.to_numpy(float), stim_times))
         lick_times.append(_detect_licks(t, features))
-    # One whisker signal: the larger of the two cameras at each time (authors' code).
+    # One whisker signal: the larger of the two cameras at each time (Posani-Wang code).
     whisker = np.maximum(*whisker)
     # Licks seen by either camera, counted per bin (as IBL combines the two cameras).
     lick_times = np.unique(np.concatenate(lick_times))

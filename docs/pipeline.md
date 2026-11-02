@@ -4,10 +4,10 @@
 `pipeline/`. Each stage reads the previous stage's checkpoint and writes its
 own to `outputs/<dataset>/`; a stage whose checkpoint exists is skipped. The
 analyses in `analyses/` read the checkpoints: `checks.py` makes the figures
-shown below for each stage, and `area_selectivity.py` makes the paper's
-Fig. 2c. Figures and tables go to `outputs/<dataset>/results/`. The results
+shown below for each stage, and `area_selectivity.py` the mean
+selectivity per area. Figures and tables go to `outputs/<dataset>/results/`. The results
 below are for the `agent` dataset (the IBL agent's download). Differences from
-the authors are listed in [differences.md](differences.md); where each rule
+Posani-Wang are listed in [differences.md](differences.md); where each rule
 comes from, in [sources.md](sources.md).
 
 ## Checkpoint 1: sessions
@@ -22,9 +22,9 @@ through the dataset's sessions and, for each one:
   0.8 s around the stimulus. Keep neurons in a real brain area, with a session
   firing rate between 0.5 and 50 Hz, a rate above 0.5 Hz in that window, and
   spikes in at least half of the trials. Units with no area label in the local
-  data are what the authors' atlas mapping calls "root", so they are dropped.
+  data are what Posani-Wang's atlas mapping calls "root", so they are dropped.
   All brain areas are kept, not only cortex: the model's temporal bases are
-  shared by every neuron, so the authors fit it on all neurons and only pick
+  shared by every neuron, so Posani-Wang fits it on all neurons and only picks
   cortex at the end. Sessions with fewer than 5 neurons are skipped.
 - Behaviour (`prepare_behaviour`): wheel velocity, whisker motion energy (max
   of the two cameras) and lick counts, in 120 bins of 10 ms from -0.3 to
@@ -55,7 +55,7 @@ that camera finds no licks for it; the other camera still does.
 
 ![Sessions: the first session's signals, averaged by choice](../outputs/agent/results/signals_by_choice.png)
 
-Validation: on one session (875c1e5c), the authors' trial and neuron selection
+Validation: on one session (875c1e5c), Posani-Wang's trial and neuron selection
 (`filter_trials_func`, `_read_Xy`) gives the same 535 trials and the same 48
 neurons as ours.
 
@@ -64,7 +64,7 @@ neurons as ours.
 `pipeline/inputs.py` turns each session from checkpoint 1 into what the model
 is fitted on:
 
-- Targets, y (`prepare_targets`; paper Methods, "Target variables", eq. 1):
+- Targets, y (`prepare_targets`; Posani-Wang Methods, "Target variables", eq. 1):
   spike counts smoothed in time with a Gaussian (s.d. 20 ms), then z-scored per
   neuron and time bin across trials. Smoothing turns noisy 0/1 spike counts
   into an estimate of the firing rate. Z-scoring puts every neuron and time bin
@@ -73,18 +73,18 @@ is fitted on:
   time bin, y only contains how each trial differs from the average trial;
   that is what the model explains.
 - Inputs, X (`prepare_inputs`): the 8 variables at every trial and time bin.
-  - Task variables, constant within a trial, encoded as in the paper's Methods
+  - Task variables, constant within a trial, encoded as in the Posani-Wang Methods
     ("Input variables"): block (+1 = left block, p(left) = 0.8), side (+1 =
     stimulus on the left), contrast (0 for 0%, 1 for low contrast up to 12.5%,
-    4 for high), choice (+1 = clockwise), outcome (+1 = reward). The authors'
+    4 for high), choice (+1 = clockwise), outcome (+1 = reward). Posani-Wang's
     code computes the outcome as "stimulus side matches the choice"; we take
     IBL's feedbackType, which is identical in all 60,528 trials.
   - Movement variables (wheel, whisker, lick): neurons and movements are not
     perfectly in sync, so each trace is shifted in time to where it lines up
     best with the session's neurons; one shift per variable and session. The
-    paper's Methods only give the idea ("shifted the movement traces so that
+    Posani-Wang Methods only give the idea ("shifted the movement traces so that
     the zero-lagged correlation was maximized", "averaged across neurons and
-    trials"). The details come from the authors' code, and we copy them:
+    trials"). The details come from the Posani-Wang code, and we copy them:
     - the shift ranges over +-100 ms, which is what their -0.3 to 0.9 s
       behaviour window allows;
     - the measure is a cross-correlation (their "CC"): for each shift, each
@@ -97,8 +97,8 @@ is fitted on:
     - if the best shift is at the edge of the range (+-100 ms), the search
       counts as failed and the trace is used unshifted.
   - Every variable is then z-scored per time bin across trials, as in the
-    paper's Methods (so the coefficients are comparable across variables, and
-    the ridge penalty treats them equally). The authors' code also z-scores
+    Posani-Wang Methods (so the coefficients are comparable across variables, and
+    the ridge penalty treats them equally). The Posani-Wang code also z-scores
     each movement trace over all bins first; the per-bin z-score undoes that,
     so we skip it.
 
@@ -120,13 +120,13 @@ Results: the chosen shifts (`results/shifts.csv`,
 sensing the movement). The shift search fails in 37 sessions for the wheel, 27
 for whisker and 19 for lick, and these failures continue the same trends:
 almost all wheel failures want more than +100 ms, all whisker failures less
-than -100 ms. So the +-100 ms range of the authors' code is too narrow for
+than -100 ms. So the +-100 ms range of the Posani-Wang code is too narrow for
 some sessions; we keep it and the failure rule, to match them (see
 [differences.md](differences.md), Limitations).
 
 ![Inputs: the movement shifts, for one session and across sessions](../outputs/agent/results/movement_shifts.png)
 
-Validation: on 5 sessions, against the authors' `find_bestdelay_byCC` and
+Validation: on 5 sessions, against Posani-Wang's `find_bestdelay_byCC` and
 `_read_Xy`: y is identical, X equal to within 3e-7 (rounding), and every chosen
 shift is the same.
 
@@ -135,7 +135,7 @@ shift is the same.
 `pipeline/rrr.py` fits the encoding model to all neurons of all sessions at
 once.
 
-- The model (`RRR`; paper Methods, eq. 2-3): each neuron's z-scored activity
+- The model (`RRR`; Posani-Wang Methods, eq. 2-3): each neuron's z-scored activity
   is a linear combination of the 8 variables, with time-varying coefficients,
   plus a baseline per neuron and time bin:
   `y_hat[n](k, t) = sum_v beta[n, v](t) * x[v](k, t) + b[n](t)`. Since X and
@@ -146,35 +146,35 @@ once.
   reduced rank is what makes the fit possible with few trials: 8 x 5 = 40
   numbers per neuron instead of 8 x 100, and every neuron helps estimate V.
   This is why all brain areas are fitted, not only cortex.
-- The fit (`fit`; paper Methods, eq. 7): minimize the squared prediction error
+- The fit (`fit`; Posani-Wang Methods, eq. 7): minimize the squared prediction error
   plus a ridge penalty, lambda times the sum of all beta² (the baseline is not
-  penalized), with L-BFGS and the authors' settings, over all sessions together.
-- No hyperparameter search: d = 5 shapes (the paper's best) and lambda = 75
+  penalized), with L-BFGS and Posani-Wang's settings, over all sessions together.
+- No hyperparameter search: d = 5 shapes (Posani-Wang's best) and lambda = 75
   (see [differences.md](differences.md)).
 - It is fitted twice over:
   - 3 times on 70% of each session's trials, measuring each neuron's R² on the
     other 30%, trials the model never saw (`cross_validated_r2`). Averaged over the 3
     splits, this is the honest goodness of fit that the profiles use to keep the
-    well-fit neurons (paper Methods: "We repeated the whole
+    well-fit neurons (Posani-Wang Methods: "We repeated the whole
     split-train-test process three times"). The test fraction is 0.3 as in
-    the authors' code; the paper says one-third.
+    the Posani-Wang code; Posani-Wang says one-third.
   - once on all trials (`fit_all_trials`). Its coefficients are the profiles'.
 - The splits are stratified by block x contrast, so every combination is in
-  both parts (paper Methods); if a session has too few trials of some
-  combination, by block only, then not at all (authors' code). The paper
+  both parts (Posani-Wang Methods); if a session has too few trials of some
+  combination, by block only, then not at all (Posani-Wang code). Posani-Wang
   doesn't say why only these two variables. Our reading: they are set by the
   experimenter rather than by the mouse's behaviour, they are the ones most
   likely to be unbalanced by chance (blocks come in long runs; 0% contrast is
   ~10% of trials), and adding more variables would leave too few trials per
   combination to split.
 - R² is computed on spike counts: the data and the predictions are
-  un-z-scored first (authors' code). The two versions differ. Per neuron,
+  un-z-scored first (Posani-Wang code). The two versions differ. Per neuron,
   with s(t) and m(t) the std and mean across trials at time bin t, the errors
   in counts are the z-scored errors weighted by s(t)², and the total variation
   in counts is K * sum_t s(t)² (trial-to-trial) + K * sum_t (m(t) - mean)² (the
   average response over time). So on spike counts the average response also
   counts as explained, and R² is higher than on z-scored data. We use spike
-  counts because the paper's goodness of fit and its threshold on R² minus the
+  counts because Posani-Wang's goodness of fit and its threshold on R² minus the
   average-response model's R² (checkpoint 4) are defined on firing rates.
 
 Output, in `outputs/<dataset>/model/`:
@@ -204,8 +204,8 @@ profiles subtract.
 
 ![Model: the final fit's loss, the learned time shapes, and the per-neuron test R²](../outputs/agent/results/fit.png)
 
-Validation: the model, the loss and the initialization scheme follow the
-authors' `RRRGD_model`. A preliminary fit on all trials was inspected before
+Validation: the model, the loss and the initialization scheme follow
+Posani-Wang's `RRRGD_model`. A preliminary fit on all trials was inspected before
 the full run (converging loss, smooth time shapes), and a reduced run (3
 sessions, 10 iterations) covered saving and resuming.
 
@@ -215,15 +215,15 @@ sessions, 10 iterations) covered saving and resuming.
 defines their selectivity.
 
 - R² of the RRR: each neuron's test R² from checkpoint 3, averaged over the 3 splits.
-- R² of the null model (`null_r2`; paper Methods, eq. 8): the null model
+- R² of the null model (`null_r2`; Posani-Wang Methods, eq. 8): the null model
   predicts every test trial with the average response of the training trials,
   one value per time bin, ignoring the 8 variables. It uses the same splits
   and the same R² as the RRR, imported from `pipeline/rrr.py`.
-- delta R² = R²(RRR) - R²(null) (paper Methods, eq. 9): what the 8 variables
+- delta R² = R²(RRR) - R²(null) (Posani-Wang Methods, eq. 9): what the 8 variables
   add beyond the average response. Both R²'s include the part the average
   response explains on spike counts, so it cancels here.
-- A neuron is selected if delta R² > 0.015. The paper's Methods write >= 0.015;
-  the authors' code uses >, which we follow (with continuous R² values the
+- A neuron is selected if delta R² > 0.015. The Posani-Wang Methods write >= 0.015;
+  the Posani-Wang code uses >, which we follow (with continuous R² values the
   difference is negligible).
 
 Output, in `outputs/<dataset>/profiles/`:
@@ -234,24 +234,25 @@ Output, in `outputs/<dataset>/profiles/`:
   (neurons, 8 variables, 100 time bins), in the same row order as the table.
 
 Results: almost every neuron is predicted better by the RRR than by the null
-model (`results/r2_vs_null.png`). 8,335 of the 19,728 neurons are
-selected; in cortex, 1,739 of 4,233 (41%; the paper: 4,617 of about 14,000,
-33%). 16 cortical areas have at least 30 selected neurons, the minimum to
-appear in Fig. 2c (the paper shows 31): ACAd, AId, AUDp, MOp, MOs, ORBvl, PL,
-RSPd, RSPv, SSp-bfd, SSp-m, SSp-tr, SSs, VISa, VISam, VISp. 3,342 neurons have
-a negative delta R²: the RRR predicts their unseen trials worse than the
-average does, i.e. they have no real selectivity.
+model (`results/r2_vs_null.png`). 8,335 of the 19,728 neurons are selected; in
+cortex, 1,739 of 4,233 (41%; Posani-Wang: 4,617 of about 14,000, 33%). 16
+cortical areas have at least 30 selected neurons, the minimum to appear in the
+area selectivity figure (Posani-Wang's Fig. 2c shows 31): ACAd, AId, AUDp, MOp,
+MOs, ORBvl, PL, RSPd, RSPv, SSp-bfd, SSp-m, SSp-tr, SSs, VISa, VISam, VISp.
+3,342 neurons have a negative delta R²: the RRR predicts their unseen trials
+worse than the average does, i.e. they have no real selectivity.
 
 ![Profiles: R² of the RRR against the null model, and delta R²](../outputs/agent/results/r2_vs_null.png)
 
-Validation: the null model and the selection follow the authors'
+Validation: the null model and the selection follow Posani-Wang's
 `trial_avg_r2` and `Fig2c.py`; the splits and R² are the model's own functions.
 
-## Analysis: area selectivity (the paper's Fig. 2c)
+## Analysis: area selectivity
 
-`analyses/area_selectivity.py` makes the figure, as the authors' `Fig2c.py` does.
+`analyses/area_selectivity.py` makes the figure, as Posani-Wang's `Fig2c.py`
+does for their Fig. 2c.
 
-- Selectivity of each neuron to each variable (paper Methods, "Computing the
+- Selectivity of each neuron to each variable (Posani-Wang Methods, "Computing the
   selectivity profiles"; `profiles.alpha`): alpha = sum over the 100 time bins of |beta(t)|,
   the total modulation over the trial. The absolute value makes effects of
   opposite sign (or in opposite directions at different times) add up instead
@@ -259,31 +260,31 @@ Validation: the null model and the selection follow the authors'
   irrelevant: alpha measures how strongly a neuron is modulated, not in which
   direction.
 - Neurons: the selected ones (checkpoint 4) in the 43 cortical areas. Areas: those
-  with at least 30 such neurons (authors' code).
+  with at least 30 such neurons (Posani-Wang code).
 - Each area's alpha is averaged over its neurons and z-scored across areas,
   separately for each variable. Variables differ in how strongly they
   modulate neurons overall (whisking modulates nearly everything more than the
   block does); z-scoring per variable removes that, so each column shows which
   areas stand out for that variable. Colours compare areas within a column,
   not variables, and depend on which areas are shown.
-- Areas are ordered as in the authors' code: grouped by family
+- Areas are ordered as in the Posani-Wang code: grouped by family
   (somatosensory, visual, auditory and gustatory, retrosplenial, insular,
   others), each in hierarchy order, then reversed. The 3 most selective areas
   of each variable are marked with triangles, as in the published figure (the
-  authors' code uses "*").
+  Posani-Wang code uses "*").
 
 Output, in `outputs/<dataset>/results/`: `area_selectivity.png`, and
 `area_selectivity.csv` with the z-scored values and each area's number of
 selected neurons.
 
-Results: 16 areas, from 1,403 selected cortical neurons. With 16 of the
-paper's 31 areas, the fair comparison is the paper's top-3 markers that fall
+Results: 16 areas, from 1,403 selected cortical neurons. With 16 of
+Posani-Wang's 31 areas, the fair comparison is Posani-Wang's top-3 markers that fall
 on areas we have: 10 of those 14 are reproduced. Side (MOs, ACAd), choice
 (MOs, ACAd), outcome (AId, AUDp), wheel (PL, SSs) and lick (AUDp) match
 fully; block matches 1 of 3 (RSPd; ACAd and RSPv come just below); whisker
 matches 0 of 2 (SSs and SSp-bfd are high but not top; the frontal ORBvl and
-PL come first); none of the paper's contrast markers are in our areas (VISp
-leads among ours). The overall pattern is the paper's: frontal and motor areas
+PL come first); none of Posani-Wang's contrast markers are in our areas (VISp
+leads among ours). The overall pattern is Posani-Wang's: frontal and motor areas
 lead the cognitive and choice variables, medial and frontal areas the block,
 somatosensory areas and AUDp the licking. Likely causes of the differences:
 fewer neurons per area (noisier averages), good units only, one movement

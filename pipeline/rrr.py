@@ -14,15 +14,15 @@ from sklearn.model_selection import train_test_split
 from tqdm import tqdm
 
 # ---- Model
-RANK = 5  # d, number of shared time shapes (paper: d = 5 was best)
-L2 = 75   # lambda, ridge penalty: fixed to the middle of the authors' grid (25, 75, 200)
+RANK = 5  # d, number of shared time shapes (Posani-Wang: d = 5 was best)
+L2 = 75   # lambda, ridge penalty: fixed to the middle of the Posani-Wang grid (25, 75, 200)
 
 # ---- Cross-validation
-N_SPLITS = 3         # paper Methods: the split-train-test process is repeated 3 times
-TEST_FRACTION = 0.3  # authors' code (the paper says "one-third")
-SPLIT_SEED = 42      # authors' code: split i uses random seed 42 + i
+N_SPLITS = 3         # Posani-Wang Methods: the split-train-test process is repeated 3 times
+TEST_FRACTION = 0.3  # Posani-Wang code (their Methods say "one-third")
+SPLIT_SEED = 42      # Posani-Wang code: split i uses random seed 42 + i
 
-# ---- Fitting: L-BFGS settings of the authors' code
+# ---- Fitting: L-BFGS settings of the Posani-Wang code
 MAX_ITER = 1000
 TOLERANCE_GRAD, TOLERANCE_CHANGE = 1e-7, 1e-4
 HISTORY_SIZE = 50
@@ -31,7 +31,7 @@ HISTORY_SIZE = 50
 # ================================================================ model
 
 class RRR(torch.nn.Module):
-    """The RRR encoding model (paper Methods, eq. 2-3; authors' RRRGD_model).
+    """The RRR encoding model (Posani-Wang Methods, eq. 2-3; Posani-Wang's RRRGD_model).
 
     For each neuron n, variable v and time bin t:
         beta[n, v](t) = sum_i U[n, v, i] * V[i](t)          (eq. 3)
@@ -47,7 +47,7 @@ class RRR(torch.nn.Module):
         super().__init__()
         torch.manual_seed(0)
         _, n_bins, n_variables = next(iter(sessions.values()))[0].shape
-        scale = 1 / np.sqrt(n_bins * rank)  # small random start (authors' code)
+        scale = 1 / np.sqrt(n_bins * rank)  # small random start (Posani-Wang code)
         self.V = torch.nn.Parameter(torch.randn(rank, n_bins, dtype=torch.float64) * scale)
         self.U = torch.nn.ParameterDict()
         self.b = torch.nn.ParameterDict()
@@ -73,7 +73,7 @@ class RRR(torch.nn.Module):
 # ================================================================ fitting
 
 def _as_tensors(data, trials):
-    """{eid: trial indices} -> {eid: (X, y)} of those trials, in float64 (authors' code)."""
+    """{eid: trial indices} -> {eid: (X, y)} of those trials, in float64 (Posani-Wang code)."""
     return {eid: (torch.tensor(d["X"][trials[eid]], dtype=torch.float64),
                   torch.tensor(d["y"][trials[eid]], dtype=torch.float64))
             for eid, d in data.items()}
@@ -82,7 +82,7 @@ def _as_tensors(data, trials):
 def _session_loss(model, eid, x, y, l2):
     """Squared prediction error plus ridge penalty on the betas, for one session.
 
-    Paper Methods, eq. 7. The baseline b is not penalized (authors' code).
+    Posani-Wang Methods, eq. 7. The baseline b is not penalized (Posani-Wang code).
     """
     error = ((model.predict(eid, x) - y) ** 2).sum()
     penalty = l2 * (model.beta(eid) ** 2).sum()
@@ -90,7 +90,7 @@ def _session_loss(model, eid, x, y, l2):
 
 
 def fit(model, sessions, l2, name):
-    """Fit the model to all sessions at once with L-BFGS (authors' settings).
+    """Fit the model to all sessions at once with L-BFGS (Posani-Wang settings).
 
     Shows a progress bar labelled `name`. Returns the loss after every
     evaluation, to see how the fit converged.
@@ -140,9 +140,9 @@ def split_trials(x, variables, split):
     """Training and test trial indices of one session, for one split.
 
     The test trials are TEST_FRACTION of the trials, drawn so that every block x
-    contrast combination is in both parts (paper Methods). If a session has too
+    contrast combination is in both parts (Posani-Wang Methods). If a session has too
     few trials of some combination, balance by block only, then not at all
-    (authors' code). Also used by the profiles' null model, which needs the same splits.
+    (Posani-Wang code). Also used by the profiles' null model, which needs the same splits.
     """
     first_bin = x[:, 0, :]  # task variables are constant within a trial
     block = first_bin[:, list(variables).index("block")]
@@ -159,7 +159,7 @@ def split_trials(x, variables, split):
 
 
 def r2_spike_counts(y, y_hat, y_mean, y_std):
-    """R² of each neuron, on spike counts (authors' compute_R2_RRRGD).
+    """R² of each neuron, on spike counts (Posani-Wang's compute_R2_RRRGD).
 
     y and y_hat are z-scored (trials, time bins, neurons); they are un-z-scored
     first, and each neuron's R² is clipped at 0. Also used by the profiles' null model.
@@ -168,7 +168,7 @@ def r2_spike_counts(y, y_hat, y_mean, y_std):
     share of the trial-to-trial variation the model explains. On spike counts,
     the average response over time is added back to both data and prediction,
     so it also counts as explained: R² is the share of all variation, and is
-    higher. The paper's goodness of fit, and the profiles' threshold on R² minus
+    higher. Posani-Wang's goodness of fit, and the profiles' threshold on R² minus
     the average-response model's R², are defined on firing rates, so we use the
     spike-count version.
     """

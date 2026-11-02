@@ -27,7 +27,7 @@ from pipeline import ibl, inputs, profiles, rrr, sessions
 DATASETS = {
     "agent": {
         "description": "the IBL agent's download: IBL's 2024 neuron lists, good units only",
-        "sessions": "data/eid_list.npy",  # the 178 sessions the authors trained on
+        "sessions": "data/eid_list.npy",  # the 178 sessions Posani-Wang trained on
     },
 }
 
@@ -148,7 +148,7 @@ def _read_inputs(out):
     """Every session's inputs (checkpoint 2), by session id. Used by the model and the profiles.
 
     They stay in float32 to save memory; each fit converts the trials it uses
-    to float64, as in the authors' code.
+    to float64, as in the Posani-Wang code.
     """
     return {path.stem: dict(np.load(path)) for path in sorted(Path(f"{out}/inputs").glob("*.npz"))}
 

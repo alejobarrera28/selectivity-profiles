@@ -1,17 +1,19 @@
 # Working on this repo
 
-Context for anyone (developer or coding agent) continuing this analysis. Start
+Context for anyone (developer or coding agent) continuing this project. Start
 with README.md, then docs/.
 
 ## What this is
 
-A from-scratch reimplementation of the RRR encoding-model analysis of Posani,
-Wang et al. (Nature 2026), on IBL Brain Wide Map data downloaded by the IBL AI
-agent (`../ibl-ai-agent`). The authors' code, for reference, is
-https://github.com/realwsq/brainwide-RRR-encoding-model (commit 00d40b9).
-Understanding every step matters more than speed: each choice must be
-explainable and traceable to the paper, the authors' code, or a recorded
-decision of ours.
+A research project, in progress, on the selectivity profiles of single
+neurons across the whole mouse brain, on the IBL Brain Wide Map. The encoding
+model follows Posani, Wang et al. (Nature 2026; "Posani-Wang" in the code and
+docs), reimplemented from scratch;
+their code (https://github.com/realwsq/brainwide-RRR-encoding-model, commit
+00d40b9) is the reference for the method's details. The data currently comes
+from the IBL AI agent's download (`../ibl-ai-agent`). Understanding every step
+matters more than speed: each choice must be explainable and traceable to the
+Posani-Wang paper or code, or to a recorded decision of ours.
 
 ## Conventions
 
@@ -32,13 +34,13 @@ decision of ours.
   `results/` (figures and tables) is committed.
 - Module layout: module docstring (what it does); constants at the top,
   grouped by topic (`# ---- Trials`, `# ---- Model`, ...), each with its source
-  ("paper Methods", "authors' code"); then `# =====` sections per entity,
-  helpers prefixed with `_`, one public function per entity (`prepare_*`,
+  ("Posani-Wang Methods", "Posani-Wang code"); then `# =====` sections per
+  entity, helpers prefixed with `_`, one public function per entity (`prepare_*`,
   `fit`, ...). `run.py` has no `# =====` sections: its functions follow the
   pipeline's order. Mains and stage functions use numbered comments
   (`# 1. ...`) for their steps.
 - Rules that select trials or neurons are named entries of a `rules`
-  dictionary, each tagged `# paper Methods` or `# authors' code`.
+  dictionary, each tagged `# Posani-Wang Methods` or `# Posani-Wang code`.
 - Values decided in one stage travel with the data (e.g. the time axis `dt`,
   `neural_start`) instead of being redefined in later stages or analyses.
 - Comments explain decisions and sources, not mechanics; no comments about
@@ -51,20 +53,21 @@ decision of ours.
 
 ## Documentation
 
-- README.md: what the analysis is, the figure, how to run it, short results.
+- README.md: what the project is, how the code is organized, how to run it.
 - docs/pipeline.md: per stage: what and why, outputs, results, validation.
-- docs/differences.md: differences from the authors, limitations, open questions.
-- docs/sources.md: inputs' provenance and where each rule lives in the authors' code.
+- docs/differences.md: differences from Posani-Wang, limitations, open questions.
+- docs/sources.md: inputs' provenance and where each rule lives in the
+  Posani-Wang code.
 
-Any change to a stage or an analysis updates the matching docs. Plain, readable prose; no
-heavy formatting.
+Any change to a stage or an analysis updates the matching docs. Plain,
+readable prose; no heavy formatting.
 
 ## Workflow
 
 - Explain a change (what, how, why, its source) before or right after making
   it; walk through new code before committing.
-- Validate each stage against the authors' code where possible, and record the
-  result briefly in docs/pipeline.md.
+- Validate each stage against the Posani-Wang code where possible, and record
+  the result briefly in docs/pipeline.md.
 - A reorganization moves code verbatim: same names, docstrings, comments and
   prints; only what the move requires changes, and the diff is reviewed.
 - Never commit unreviewed code. One commit per change; ask before pushing.

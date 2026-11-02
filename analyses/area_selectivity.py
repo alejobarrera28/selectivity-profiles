@@ -1,9 +1,9 @@
-"""The average selectivity of each cortical area to each variable (the paper's Fig. 2c).
+"""The average selectivity of each cortical area to each variable.
 
 For each selected cortical neuron, its selectivity alpha to each variable
 (pipeline.profiles.alpha). Areas with enough selected neurons are kept; alpha
 is averaged per area and z-scored across areas, separately for each variable.
-Same as the authors' Fig2_globally_structured_brain/Fig2c.py.
+Same as the Posani-Wang code (Fig2_globally_structured_brain/Fig2c.py).
 
 Run from the repo root: python -m analyses.area_selectivity <dataset>
 Output: the figure and its values, in outputs/<dataset>/results/.
@@ -18,21 +18,22 @@ from pipeline.inputs import VARIABLES
 from pipeline.profiles import alpha
 
 # ---- Areas
-# The 43 cortical areas, in the paper's hierarchy order (authors' data/area_list.csv).
+# The 43 cortical areas, in Posani-Wang's hierarchy order (their data/area_list.csv).
 CORTICAL_AREAS = "data/area_list.csv"
-MIN_NEURONS_PER_AREA = 30  # authors' Fig2c.py: areas with fewer selected neurons are not shown
-# Top to bottom of the figure: the authors group the areas by family, in this order,
-# and then reverse it (Fig2c.py). Areas in none of these families go last, before reversing.
+MIN_NEURONS_PER_AREA = 30  # Posani-Wang code (Fig2c.py): areas with fewer selected neurons are not shown
+# Top to bottom of the figure: the Posani-Wang code groups the areas by family, in this
+# order, and then reverses it (Fig2c.py). Areas in none of these families go last,
+# before reversing.
 AREA_FAMILIES = [("SS",), ("VIS",), ("AUD", "GU"), ("RSP",), ("AI",)]
 
 # ---- Figure
-N_TOP = 3  # mark the 3 most selective areas of each variable (paper's triangles)
+N_TOP = 3  # mark the 3 most selective areas of each variable (Posani-Wang's triangles)
 
 
 # ================================================================ selectivity
 
 def area_order(areas):
-    """The authors' order of the areas, top to bottom of the figure (Fig2c.py)."""
+    """Posani-Wang's order of the areas, top to bottom of the figure (Fig2c.py)."""
     ordered = []
     for family in AREA_FAMILIES:
         ordered += [a for a in areas if a not in ordered and any(f in a for f in family)]

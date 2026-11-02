@@ -108,7 +108,7 @@ def plot_fit(final, splits, dt, neural_start, path):
 def plot_r2_vs_null(table, path):
     """R² of the RRR against R² of the null model, and the distribution of delta R².
 
-    Like the paper's Fig. 2b, except that Fig. 2b compares with an average per
+    Like Posani-Wang's Fig. 2b, except that their Fig. 2b compares with an average per
     task condition, and this with the null model (one average over all trials).
     """
     fig, axes = plt.subplots(1, 2, figsize=(10, 4))

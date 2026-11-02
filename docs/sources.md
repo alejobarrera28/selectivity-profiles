@@ -1,22 +1,22 @@
 # Sources
 
-Where every input comes from, and where each rule lives in the authors' code.
-Comments in the code say whether each rule comes from the paper's Methods or
-the authors' code; this file says where to find it.
+Where every input comes from, and where each rule lives in the Posani-Wang code.
+Comments in the code say whether each rule comes from the Posani-Wang Methods or
+the Posani-Wang code; this file says where to find it.
 
-- Paper: Posani, Wang, Muscinelli, Paninski & Fusi, "Rarely categorical,
+- Paper ("Posani-Wang"): Posani, Wang, Muscinelli, Paninski & Fusi, "Rarely categorical,
   highly separable representations along the cortical hierarchy", Nature
   (2026), https://doi.org/10.1038/s41586-026-10668-4.
-- Authors' code: https://github.com/realwsq/brainwide-RRR-encoding-model,
+- Code: https://github.com/realwsq/brainwide-RRR-encoding-model,
   commit 00d40b9 (2026-09-24).
 
 ## Inputs
 
-- `data/eid_list.npy`: the 178 sessions the authors used. Copied unchanged from
+- `data/eid_list.npy`: the 178 sessions Posani-Wang used. Copied unchanged from
   their repo (`data/eid_list.npy`). We use their list instead of rebuilding it
   because the same search on today's IBL database would return different
   sessions.
-- `data/area_list.csv`: the 43 cortical areas the paper analyses, in hierarchy
+- `data/area_list.csv`: the 43 cortical areas Posani-Wang analyses, in hierarchy
   order. Copied unchanged from the same place. Both files: Copyright (c) 2026
   Shuqi Wang, MIT License.
 - The IBL data: the Brain Wide Map datasets downloaded by the IBL AI agent
@@ -24,17 +24,19 @@ the authors' code; this file says where to find it.
   `../ibl-ai-agent/reports/datasets/`: `bwm_ephys` 1.2.1 and `bwm_behavior`
   2.0.0, built from IBL's `2023_12_bwm_release`. 172 of the 178 sessions are
   there. The agent's package is only used to decode their compressed files.
+  Its neurons are IBL's 2024 neuron lists (revision 2024-05-06), not the
+  original ones Posani-Wang used (see [differences.md](differences.md)).
 
 Why the local data and not IBL's servers: we chose not to download anything
-new (the authors estimate ~3 days for their download and training, and the
+new (Posani-Wang's README estimates ~3 days for the download and training, and the
 laptop had ~15 GB of free disk). The price is that the local spike files only
 contain good units (see [differences.md](differences.md)). Getting every
-cluster, as the authors did, would mean streaming the spike files of the
+cluster, as Posani-Wang did, would mean streaming the spike files of the
 sessions' 289 probes from IBL's ONE API (roughly estimated at ~100 GB),
 binning each one and deleting it. Only the spikes given to `prepare_neurons`
 would change.
 
-## The authors' code
+## The Posani-Wang code
 
 - Trial rules (choice, reaction and response time): `filter_trials_func` in
   `utils/download_data.py`, called from `step1_IBL_downloaddata.py`.
@@ -53,7 +55,7 @@ would change.
   `utils/save_and_load_data.py`. Movement shifts: `find_bestdelay_byCC`
   (lines 227-247, including the failure rule at 242-246) and
   `_preprocess_movement` (line 89: failed search -> unshifted) in the same
-  file. The authors compute the outcome as "stimulus side matches the choice";
+  file. the Posani-Wang code computes the outcome as "stimulus side matches the choice";
   we take IBL's feedbackType, identical in every trial.
 - Model: the model, its initial values, the loss and the ridge penalty are
   `RRRGD_model` in `utils/RRRGD.py`. The L-BFGS fit and the cross-validation
