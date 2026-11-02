@@ -36,7 +36,7 @@ def null_r2(session):
 
 
 def neuron_table(data, split_r2):
-    """One row per neuron: its session, probe, cluster, area, R², delta R² and selection.
+    """One row per neuron: its session, probe, cluster, IBL id, area, R², delta R² and selection.
 
     `data` maps each session id to its inputs (the inputs stage's files);
     `split_r2` is the list of {eid: test R² per neuron}, one per split (the
@@ -44,7 +44,7 @@ def neuron_table(data, split_r2):
     """
     table = pd.concat([pd.DataFrame({
         "eid": eid, "pid": session["pid"], "cluster_id": session["cluster_id"],
-        "area": session["area"],
+        "uuid": session["uuid"], "area": session["area"],
         "r2_rrr": np.mean([split[eid] for split in split_r2], axis=0),
         "r2_null": null_r2(session),
     }) for eid, session in data.items()], ignore_index=True)

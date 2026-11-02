@@ -6,38 +6,23 @@ and what to compare our results against.
 
 ## Differences from Posani-Wang
 
-- Neurons: we only have "good units" (IBL's best-quality neurons), while
-  Posani-Wang used every neuron firing between 0.5 and 50 Hz. In Posani-Wang's
-  sessions that's about 5,800 cortical candidates instead of 39,000; after
-  the sessions stage we have 4,233 cortical neurons, while Posani-Wang reports
-  about 14,000.
-  So fewer areas reach the 30 well-fit neurons needed to appear in the area
-  selectivity figure (16 instead of 31). This is by far the largest difference.
-- Neuron lists: IBL turns each probe's recording into a list of neurons, each
-  with an id (uuid). In 2024 it re-ran this on every recording with its newest
-  method ("2024-05-15 Spike-sorting re-run" in the changelog of IBL's Brain
-  Wide Map release page): in the 170 sessions we share with Posani-Wang, it
-  found 250,797 neurons instead of 149,560, and gave every neuron a new id.
-  IBL keeps both versions; the 2024 one (revision 2024-05-06) is the default.
-  The agent's data is the 2024 version: its table of all clusters has the
-  621,733 neurons IBL reports for the re-run. Posani-Wang's trained model uses
-  the earlier one. Checked on the 170 sessions we share
-  with them, by downloading each version's list of ids from IBL's server: all
-  of their neurons are in the original list (in one session, part of one
-  probe's come from a 2022-08-04 revision), all of ours in the 2024 one, and
-  the two lists share no id. So the neurons can't be matched one to one, and
-  part of any difference from Posani-Wang may come from the data version rather
-  than the method.
-- Sessions: 172 instead of 178, because 6 are missing from the local data.
+- Data: the `shuqi` dataset reads IBL's data as Posani-Wang had it, so it
+  differs from them only in the method. `mine` differs in two ways:
+  - Neurons: only IBL's "good units" (the ones that pass all its quality
+    metrics), while Posani-Wang used every unit firing between 0.5 and 50 Hz.
+    In their sessions that's about 5,800 cortical candidates instead of
+    39,000, so fewer areas reach the 30 well-fit neurons needed to appear in
+    the area selectivity figure.
+  - Data version: IBL's current data. In 2024 IBL re-ran, on every recording,
+    the processing that extracts the neurons ("2024-05-15 Spike-sorting
+    re-run" in the changelog of IBL's Brain Wide Map release page): in
+    Posani-Wang's sessions it found about 1.7 times as many neurons, and gave
+    every neuron a new id, so the two versions share no neuron. IBL also
+    revised the trials, licks and motion energy of most sessions in 2025.
 - Minimum of 100 trials per session: we count the trials left after all
   selection rules. The Posani-Wang code counts before removing the 50/50 block,
   which looks like an accident (the model is only fitted on the trials left
   after it). This drops 2 sessions they would keep (about 20 cortical neurons).
-- Licks: Posani-Wang used IBL's lick times. The local data doesn't include
-  them, so we recompute them with IBL's own method from the tongue keypoints.
-  The keypoints come from a newer tracker (Lightning Pose instead of
-  DeepLabCut), and the right camera is stored at 60 instead of 150 frames per
-  second, so our lick times will differ somewhat.
 - Wheel velocity: the Posani-Wang code filters the wheel position trial by trial; we
   filter the whole session at once with the same filter, which avoids edge
   effects at the start and end of each trial. Small difference.
@@ -100,9 +85,8 @@ shuffled across trials.
   on request (shuqi.wang@epfl.ch). So an exact match isn't expected; the
   overall pattern is what to compare.
 - Their pre-trained model (`trained_RRR_model/RRR_selectivity.json`, 1.27 GB,
-  stored with Git LFS) has each neuron's coefficients, R² and null R². It uses
-  IBL's original neuron lists (see above), so a neuron-by-neuron comparison
-  needs our pipeline run on that version of the data.
+  stored with Git LFS) has each neuron's IBL id, coefficients, R² and null R²,
+  so the `shuqi` dataset can be compared with it neuron by neuron.
 
 ## Open questions
 
@@ -113,9 +97,9 @@ shuffled across trials.
   than the null model of the Methods and the Posani-Wang code (one average over
   all trials), which is the one the selection uses. And our RRR's R² is
   clearly lower; the cause is unknown (good units only, lambda not searched,
-  or a different set of neurons in Posani-Wang's average). Comparing with the
-  per-neuron `RRR_r2` and `null_r2` in Posani-Wang's pre-trained model, once
-  our pipeline runs on their version of the data, would tell.
+  or a different set of neurons in Posani-Wang's average). Comparing the
+  `shuqi` dataset with the per-neuron `RRR_r2` and `null_r2` in Posani-Wang's
+  pre-trained model would tell.
 - Why the cross-validation splits are stratified only by block and contrast
   (stated in Posani-Wang, not justified; see [pipeline.md](pipeline.md), the model).
 - Whether the lead/lag compromise of the single shift per session explains

@@ -19,22 +19,26 @@ the Posani-Wang code; this file says where to find it.
 - `data/area_list.csv`: the 43 cortical areas Posani-Wang analyses, in hierarchy
   order. Copied unchanged from the same place. Both files: Copyright (c) 2026
   Shuqi Wang, MIT License.
-- The IBL data: the Brain Wide Map datasets downloaded by the IBL AI agent
-  (https://github.com/int-brain-lab/ibl-ai-agent, commit 03ec7c4), in
-  `../ibl-ai-agent/reports/datasets/`: `bwm_ephys` 1.2.1 and `bwm_behavior`
-  2.0.0, built from IBL's `2023_12_bwm_release`. 172 of the 178 sessions are
-  there. The agent's package is only used to decode their compressed files.
-  Its neurons are IBL's 2024 neuron lists (revision 2024-05-06), not the
-  original ones Posani-Wang used (see [differences.md](differences.md)).
+- The IBL data: read from IBL's public server
+  (https://openalyx.internationalbrainlab.org) with IBL's ONE, each file in its
+  last revision dated on or before the dataset's date (`as_of` in `run.py`), the
+  same files the Posani-Wang code
+  reads. Each session's files are downloaded, read and deleted
+  (`pipeline/ibl.py`); only the spike files used are downloaded (times and
+  which neuron fired them), about 230 MB per probe.
 
-Why the local data and not IBL's servers: we chose not to download anything
-new (Posani-Wang's README estimates ~3 days for the download and training, and the
-laptop had ~15 GB of free disk). The price is that the local spike files only
-contain good units (see [differences.md](differences.md)). Getting every
-cluster, as Posani-Wang did, would mean streaming the spike files of the
-sessions' 289 probes from IBL's ONE API (roughly estimated at ~100 GB),
-binning each one and deleting it. Only the spikes given to `prepare_neurons`
-would change.
+The date of Posani-Wang's data. IBL revises its files and keeps every version,
+each in a folder named by the revision's date. Posani-Wang's trained model gives
+each neuron's IBL id: across their sessions, their neurons come from the
+original neuron lists, except one probe from a revision of 2022-08-04, and none
+from the revisions of 2024-03-22 (50 sessions). So they downloaded the data
+between those two dates. In between, IBL revised a few of the files we use: the
+neuron tables (`clusters.metrics`: firing rate and quality label) of 32
+sessions, and the licks, camera times, motion energy or trials of 14. With the
+last day before 2024-03-22, the pipeline reproduces their neurons exactly in the
+sessions tested (429 in 07dc4b76, 282 in 875c1e5c, 452 in cde63527, whose
+neuron table was revised on 2024-03-12). Their behaviour can't be checked: the
+trained model doesn't store it.
 
 ## The Posani-Wang code
 
@@ -47,10 +51,14 @@ would change.
   cameras: `_read_Xy` in `utils/save_and_load_data.py`.
 - Time window (they download -0.3 to 0.9 s and crop the spikes to -0.2 to
   0.8 s): `step1_IBL_downloaddata.py` and `_read_Xy`.
+- Reading the data: `load_data_from_pid` and `load_spikes_from_eid` in
+  `utils/download_data.py` (IBL's `SessionLoader` for trials and motion energy,
+  `SpikeSortingLoader` for spikes, the wheel and lick objects), with the Beryl
+  mapping in `_append_clusters_data`.
 - Wheel, whisker and lick signals: `get_wheelvelocity`, `get_interpbeh` and
-  `get_tongue` in `utils/download_data.py`. The wheel filter and the lick
-  detector are IBL's (`brainbox.behavior.wheel.velocity_filtered`,
-  `brainbox.behavior.dlc.get_licks`).
+  `get_tongue` in `utils/download_data.py`. The wheel's interpolation and
+  filter are IBL's (`brainbox.behavior.wheel.interpolate_position`,
+  `velocity_filtered`).
 - Inputs (smoothing, z-scoring, task variable encoding): `_read_Xy` in
   `utils/save_and_load_data.py`. Movement shifts: `find_bestdelay_byCC`
   (lines 227-247, including the failure rule at 242-246) and

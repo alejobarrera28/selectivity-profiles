@@ -20,12 +20,8 @@ neuron's selectivity profile. The model follows Posani, Wang et al. (Nature
 
 ## Running it
 
-Requirements: Python 3.12, and the IBL Brain Wide Map datasets as downloaded
-by the IBL AI agent, in a sibling folder:
-
-    git clone https://github.com/int-brain-lab/ibl-ai-agent ../ibl-ai-agent
-    # then download bwm_ephys and bwm_behavior (~9 GB) into
-    # ../ibl-ai-agent/reports/datasets/, following the agent's README
+Requirements: Python 3.12 and an internet connection: the data is read from
+IBL's public server, one session at a time, and deleted once read.
 
 Create the environment once, from this folder:
 
@@ -35,17 +31,16 @@ Create the environment once, from this folder:
 
 Then, with the environment active:
 
-    caffeinate -i python run.py agent           # the pipeline: about 1 hour (macOS: keeps the Mac awake)
-    python -m analyses.checks agent             # check figures for each stage
-    python -m analyses.area_selectivity agent   # mean selectivity per area
+    caffeinate -i python run.py mine            # the pipeline (macOS: caffeinate keeps the Mac awake)
+    python -m analyses.checks mine              # check figures for each stage
+    python -m analyses.area_selectivity mine    # mean selectivity per area
 
-`agent` is the dataset, defined in `run.py`. The code expects `bwm_ephys`
-1.2.1 and `bwm_behavior` 2.0.0; with a newer download, update the `EPHYS` and
-`BEHAVIOUR` paths at the top of `pipeline/ibl.py`. A stage whose output exists
-is skipped, and the model saves each fit as soon as it is done, so running it
-again after an interruption resumes where it left off. Figures and tables go
-to `outputs/<dataset>/results/`, which is kept in the repo.
+`mine` is a dataset, defined in `run.py`: which sessions, IBL's data as of
+which date, and which units. `shuqi` is Posani-Wang's data. Reading the data
+takes a few hours and fitting the model about an hour per dataset. A stage
+whose output exists is skipped, and the sessions and the model's fits are
+saved one by one, so running it again after an interruption resumes where it
+left off. Figures and tables go to `outputs/<dataset>/results/`, which is kept
+in the repo.
 
 `requirements.txt` pins the versions the results were produced with.
-`ibl-ai-agent` is only used to decode the agent's compressed data files;
-`brainwidemap` is a dependency of the agent, only available on GitHub.

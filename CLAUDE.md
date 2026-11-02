@@ -10,8 +10,8 @@ neurons across the whole mouse brain, on the IBL Brain Wide Map. The encoding
 model follows Posani, Wang et al. (Nature 2026; "Posani-Wang" in the code and
 docs), reimplemented from scratch;
 their code (https://github.com/realwsq/brainwide-RRR-encoding-model, commit
-00d40b9) is the reference for the method's details. The data currently comes
-from the IBL AI agent's download (`../ibl-ai-agent`). Understanding every step
+00d40b9) is the reference for the method's details. The data is read from
+IBL's public server (`pipeline/ibl.py`). Understanding every step
 matters more than speed: each choice must be explainable and traceable to the
 Posani-Wang paper or code, or to a recorded decision of ours.
 

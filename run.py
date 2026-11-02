@@ -5,13 +5,14 @@ Four stages, each saving a checkpoint in outputs/<dataset>/ that the next one re
   inputs    the model's targets y and inputs X                         (pipeline.inputs)
   model     the RRR fits: one per cross-validation split, one on all trials  (pipeline.rrr)
   profiles  one row per neuron (area, R², selection) and its coefficients    (pipeline.profiles)
-A stage whose output already exists is skipped (the model's fits one by one,
-so an interrupted fit resumes); delete a stage's folder to redo it. The
-sessions and inputs stages also write a summary table to outputs/<dataset>/results/.
+A stage whose output already exists is skipped; the sessions and the model's
+fits are checked one by one, so an interrupted run resumes where it stopped.
+Delete a stage's folder to redo it. The sessions and inputs stages also write a
+summary table to outputs/<dataset>/results/.
 
 What goes into the pipeline is a dataset, defined in DATASETS: its data
-parameters (where the data comes from, which sessions). The method's constants
-are in each pipeline module, with their sources.
+parameters (which sessions, IBL's data as of which date, which units). The
+method's constants are in each pipeline module, with their sources.
 
 Run from the repo root: python run.py <dataset>
 """
@@ -24,31 +25,52 @@ import pandas as pd
 from pipeline import ibl, inputs, profiles, rrr, sessions
 
 # ---- Datasets: what goes into the pipeline, by name
+# as_of: for each IBL file, its last revision dated on or before that date.
 DATASETS = {
-    "agent": {
-        "description": "the IBL agent's download: IBL's 2024 neuron lists, good units only",
+    "shuqi": {
+        "description": "Posani-Wang's data: IBL's data before the 2024 re-run, all units",
         "sessions": "data/eid_list.npy",  # the 178 sessions Posani-Wang trained on
+        # Posani-Wang's trained model has neurons from a probe revised on 2022-08-04 and none
+        # from the revisions of 2024-03-22, so they downloaded the data between those dates.
+        # The last day before 2024-03-22 reproduces their neurons (docs/sources.md).
+        "as_of": "2024-03-21",
+        "good_units": False,  # Posani-Wang code: every unit
+    },
+    "mine": {
+        "description": "IBL's current data (2024 neuron lists), good units only",
+        "sessions": "data/eid_list.npy",
+        "as_of": "2026-11-01",  # when this dataset was defined: later revisions don't change it
+        "good_units": True,     # only the units that pass all of IBL's quality metrics
     },
 }
 
 
 def build_sessions(dataset, out):
     """The sessions checkpoint: for each session, its selected trials, neurons and behaviour, binned."""
-    # 1. The dataset's sessions. A few may not be in the data, so we use the ones that are.
-    listed = np.load(dataset["sessions"], allow_pickle=True).astype(str)
-    available = ibl.available_sessions()
-    eids = [eid for eid in listed if eid in available]
-    print(f"Sessions listed: {len(listed)}, available: {len(eids)}")
+    # 1. The dataset's sessions.
+    eids = np.load(dataset["sessions"], allow_pickle=True).astype(str)
+    print(f"Sessions: {len(eids)}")
 
     # 2. For each session: read its data, prepare trials, neurons and behaviour,
-    #    and save the result.
-    Path(f"{out}/sessions").mkdir(parents=True)
+    #    and save the result. Sessions saved in an earlier run are not read again.
+    Path(f"{out}/sessions").mkdir(exist_ok=True)
     summary = []
     for i, eid in enumerate(eids):
         first = i == 0  # print the per-rule counts for the first session only
+        path = f"{out}/sessions/{eid}.npz"
+        if Path(path).exists():
+            spikes = np.load(path)["spikes"]
+            summary.append({"eid": eid, "status": "saved", "trials": spikes.shape[0],
+                            "neurons": spikes.shape[2]})
+            continue
 
-        # ---- Read this session's data
-        raw = ibl.load_session(eid)
+        # ---- Read this session's data (skipped if IBL can't serve it, as in the Posani-Wang code)
+        try:
+            raw = ibl.load_session(eid, dataset["as_of"], dataset["good_units"])
+        except Exception as error:
+            print(f"{i + 1:3d}/{len(eids)} {eid}: skipped, {type(error).__name__}: {error}")
+            summary.append({"eid": eid, "status": "no data"})
+            continue
 
         # ---- Trials
         trials = sessions.prepare_trials(raw["trials"], verbose=first)
@@ -67,17 +89,18 @@ def build_sessions(dataset, out):
             continue
 
         # ---- Behaviour
-        behaviour = sessions.prepare_behaviour(raw["wheel"], raw["cameras"], stim_times)
+        behaviour = sessions.prepare_behaviour(raw["wheel"], raw["cameras"], raw["lick_times"], stim_times)
 
         # ---- Save (raw values only: turning them into model inputs is the next stage)
         np.savez_compressed(
-            f"{out}/sessions/{eid}.npz",
+            path,
             spikes=spikes,                                  # (trials, 100 bins, neurons) counts
             **behaviour,                                    # wheel, whisker, lick: (trials, 120 bins)
             **{col: trials[col].to_numpy() for col in sessions.TRIAL_COLUMNS},
             area=units.beryl_acronym.to_numpy(str),         # one entry per neuron
             pid=units.pid.to_numpy(str),
             cluster_id=units.cluster_id.to_numpy(),
+            uuid=units.uuid.to_numpy(str),                  # IBL's id of each neuron
             # Time axis, so later stages read it from here.
             dt=sessions.DT, neural_start=sessions.NEURAL_START, behav_start=sessions.BEHAV_START,
         )
@@ -125,6 +148,7 @@ def build_inputs(out):
             variables=np.array(inputs.VARIABLES),   # names of X's 8 columns
             **{f"{name}_cross_corr": shifts[name][1] for name in inputs.MOVEMENTS},  # one value per shift
             area=session["area"], pid=session["pid"], cluster_id=session["cluster_id"],
+            uuid=session["uuid"],
             dt=session["dt"], neural_start=session["neural_start"],  # time axis, passed on
         )
         shift_ms = {f"{name}_shift_ms": round(shifts[name][0] * dt * 1000) for name in inputs.MOVEMENTS}
@@ -216,13 +240,13 @@ if __name__ == "__main__":
     out = f"outputs/{name}"
     Path(f"{out}/results").mkdir(parents=True, exist_ok=True)
 
-    # Each stage, unless its checkpoint exists (the model checks each fit itself).
+    # Each stage, unless its checkpoint exists (the sessions and the model check each file themselves).
     stages = [("sessions", lambda: build_sessions(dataset, out)),
               ("inputs", lambda: build_inputs(out)),
               ("model", lambda: fit_model(out)),
               ("profiles", lambda: build_profiles(out))]
     for stage, run in stages:
-        if stage != "model" and Path(f"{out}/{stage}").exists():
+        if stage not in ("sessions", "model") and Path(f"{out}/{stage}").exists():
             print(f"\n== {stage}: already in {out}/{stage}/, skipped")
             continue
         print(f"\n== {stage}")

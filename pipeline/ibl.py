@@ -1,88 +1,147 @@
-"""The raw IBL data of one session: trials, neurons and their spikes, wheel and cameras.
+"""The raw IBL data of one session: trials, neurons and their spikes, wheel, whisking and licks.
 
-Read from the Brain Wide Map datasets the IBL agent downloaded: tables
-(.parquet) with pandas, spikes and behaviour traces with the agent's two
-decoders, since the agent stored them in its own compressed format. The only
-module that reads files: the rest of the pipeline gets the data from here.
+Read from IBL's public server with IBL's tools (ONE, brainbox), as the
+Posani-Wang code does (utils/download_data.py), each file in its last revision
+dated on or before a given date (`as_of`). Each session's files
+are downloaded to CACHE and deleted once read. The only module that reads
+files: the rest of the pipeline gets the data from here.
 """
+import shutil
 from functools import cache
-from pathlib import Path
 
 import numpy as np
 import pandas as pd
+from brainbox.behavior.wheel import interpolate_position
+from brainbox.io.one import SessionLoader
+from iblatlas.regions import BrainRegions
+from one.api import ONE
 
-from ibl_ai_agent.datasets.bwm_behavior import load_behavior_session_shard
-from ibl_ai_agent.datasets.bwm_ephys import load_spike_shard
+# ---- IBL's public server
+SERVER = {"base_url": "https://openalyx.internationalbrainlab.org",
+          "username": "intbrainlab", "password": "international"}
+CACHE = "outputs/ibl_cache"  # downloads, deleted after each session
 
-# ---- Data location: the datasets the IBL agent downloaded
-DATA = "../ibl-ai-agent/reports/datasets"
-EPHYS = f"{DATA}/bwm_ephys/1.2.1"          # trials, units and spikes
-BEHAVIOUR = f"{DATA}/bwm_behavior/2.0.0"   # wheel and camera traces
+# ---- Neurons
+SPIKE_SORTER = "pykilosort"  # the spike sorting of the Brain Wide Map (Posani-Wang code)
+GOOD_LABEL = 1               # IBL's quality label of the units that pass every quality metric
+
+# ---- Wheel
+WHEEL_RATE = 100  # Hz: the wheel position is interpolated at this rate (Posani-Wang code)
 
 
-# ================================================================ tables
+# ================================================================ server
 
 @cache
-def _tables():
-    """The trials and units tables of every session (read once)."""
-    return (pd.read_parquet(f"{EPHYS}/metadata/trials.parquet"),
-            pd.read_parquet(f"{EPHYS}/metadata/units.parquet"))
+def _one():
+    """The connection to IBL's server (made once)."""
+    return ONE(**SERVER, cache_dir=CACHE, silent=True)
 
 
-def available_sessions():
-    """The ids (eid) of the sessions in the data."""
-    return set(_tables()[0].eid)
+@cache
+def _regions():
+    """The Allen atlas' brain regions, to name each neuron's area (made once)."""
+    return BrainRegions()
+
+
+# ================================================================ neurons
+
+def _probe_units(eid, probe, as_of):
+    """The neurons of one probe and their spikes.
+
+    The same as IBL's SpikeSortingLoader with merge_clusters (Posani-Wang code),
+    downloading only the spike files used here. A neuron's area is its channel's
+    location in the Allen atlas, mapped to Beryl areas (Posani-Wang code).
+    Returns a table with one row per neuron, each spike's time, and the row of
+    the neuron that fired it.
+    """
+    one, collection = _one(), f"alf/{probe}/{SPIKE_SORTER}"
+    # The probe's spike sorting, three IBL objects (files), each in its revision as of `as_of`:
+    #   spikes:   each spike's time, and the cluster (neuron) that fired it
+    #   clusters: each cluster's metrics (IBL cluster id, quality label, firing rate),
+    #             the channel it was detected on, and its IBL id
+    #   channels: each channel's location, as an Allen atlas region id
+    spikes = one.load_object(eid, "spikes", collection=collection,
+                             attribute=["times", "clusters"], revision=as_of)
+    clusters = one.load_object(eid, "clusters", collection=collection,
+                               attribute=["metrics", "channels", "uuids"], revision=as_of)
+    channels = one.load_object(eid, "channels", collection=collection,
+                               attribute=["brainLocationIds_ccf_2017"], revision=as_of)
+    # A cluster's area is the region of its channel.
+    area_id = channels["brainLocationIds_ccf_2017"][clusters["channels"]]
+    # One row per cluster, in IBL's order: spikes["clusters"] is the row of each spike's cluster.
+    units = pd.DataFrame({
+        "cluster_id": clusters["metrics"].cluster_id.to_numpy(),
+        "uuid": np.asarray(clusters["uuids"]),
+        "label": clusters["metrics"].label.to_numpy(),
+        "firing_rate": clusters["metrics"].firing_rate.to_numpy(),
+        "beryl_acronym": _regions().acronym2acronym(_regions().id2acronym(area_id), mapping="Beryl"),
+    })
+    return units, spikes["times"], spikes["clusters"]
+
+
+def _session_units(eid, as_of, good_units):
+    """Merge the neurons and spikes of all probes of a session into one table and one list.
+
+    With good_units, only the units IBL labels good, and their spikes, are kept.
+    Returns `units` (one row per neuron, with its probe id `pid`), `times`
+    (seconds, sorted) and `neuron` (row position in `units` of the neuron that
+    fired each spike).
+    """
+    pids, probes = _one().eid2pid(eid)  # the session's probes: ids and names (probe00, ...)
+    units, times, neuron = [], [], []
+    for pid, probe in zip(pids, probes):
+        probe_units, spike_times, spike_cluster = _probe_units(eid, probe, as_of)
+        keep = (probe_units.label == GOOD_LABEL).to_numpy() if good_units else np.ones(len(probe_units), bool)
+        # Row of each kept cluster in the session's table (-1: not kept). The rows
+        # continue after the previous probes' neurons.
+        row = np.full(len(probe_units), -1)
+        row[keep] = np.arange(keep.sum()) + sum(len(u) for u in units)
+        # The spikes of the kept clusters, each labelled with its neuron's row.
+        kept = row[spike_cluster] >= 0
+        units.append(probe_units[keep].assign(pid=str(pid)))
+        times.append(spike_times[kept])
+        neuron.append(row[spike_cluster][kept])
+    times, neuron = np.concatenate(times), np.concatenate(neuron)
+    order = np.argsort(times, kind="stable")  # probes were merged: sort in time again
+    return pd.concat(units, ignore_index=True), times[order], neuron[order]
 
 
 # ================================================================ session
 
-def _merge_probes(units, spike_shards):
-    """Merge the spikes of all probes of a session into one list.
-
-    `spike_shards` maps each probe id (pid) to its decoded spike file.
-    Returns `times` (seconds, sorted) and `neuron` (row position in `units` of
-    the neuron that fired each spike).
-    """
-    times, neuron = [], []
-    for pid, probe_units in units.groupby("pid", sort=False):
-        shard = spike_shards[pid]
-        # In a shard, spike_clusters[i] is a position in shard["cluster_ids"].
-        cluster_of_spike = shard["cluster_ids"][shard["spike_clusters"]]
-        row_of_cluster = pd.Series(probe_units.index, index=probe_units.cluster_id)
-        times.append(shard["spike_times_seconds"])
-        neuron.append(row_of_cluster.loc[cluster_of_spike].to_numpy())
-    times, neuron = np.concatenate(times), np.concatenate(neuron)
-    order = np.argsort(times, kind="stable")  # probes were merged: sort in time again
-    return times[order], neuron[order]
-
-
-def load_session(eid):
-    """Everything the pipeline uses from one session.
+def load_session(eid, as_of, good_units):
+    """Everything the pipeline uses from one session, each file as of the date `as_of`.
 
     Returns a dict with:
-      trials        the session's rows of the trials table
-      units         its neurons (good units only), one row each
+      trials        the session's trials table, one row per trial (trial_id: its index)
+      units         its neurons, one row each (all units, or good units only)
       spike_times   every spike of those neurons (s, sorted), and
       spike_neuron  the row in `units` of the neuron that fired it
-      wheel         {"t", "position"}: the wheel's position over time
-      cameras       per camera, {"t", "features"}: its tracked features over time
+      wheel         {"t", "position"}: the wheel's position, sampled at WHEEL_RATE
+      cameras       per camera (left, right), {"t", "whisker"}: its whisker motion energy
+      lick_times    IBL's lick times (s), as in the Posani-Wang code
+    Then deletes the session's downloaded files.
     """
-    all_trials, all_units = _tables()
-    units = all_units[all_units.eid == eid].reset_index(drop=True)
-    spike_shards = {pid: load_spike_shard(Path(f"{EPHYS}/spikes/{pid}"))
-                    for pid in units.pid.unique()}   # one spike file per probe
-    spike_times, spike_neuron = _merge_probes(units, spike_shards)
-    shard = load_behavior_session_shard(Path(f"{BEHAVIOUR}/sessions/{eid}.zip"))
-    return {
-        "trials": all_trials[all_trials.eid == eid],
-        "units": units,
-        "spike_times": spike_times,
-        "spike_neuron": spike_neuron,
-        "wheel": {"t": shard["wheel.timestamps"],
-                  "position": shard["wheel.position"].astype(float)},
-        "cameras": {camera: {"t": shard[f"{camera}.timestamps"],
-                             "features": pd.DataFrame(
-                                 shard[f"{camera}.features"],
-                                 columns=shard["meta"]["cameras"][camera]["columns"])}
-                    for camera in ("leftCamera", "rightCamera")},
-    }
+    one = _one()
+    try:
+        # Trials and whisker motion energy: IBL's SessionLoader, as in the Posani-Wang code.
+        session = SessionLoader(one=one, eid=eid, revision=as_of)
+        session.load_trials()
+        session.load_motion_energy(views=["left", "right"])
+        units, spike_times, spike_neuron = _session_units(eid, as_of, good_units)
+        # The wheel's position is recorded at irregular times (at each tick of its
+        # encoder): IBL's interpolate_position resamples it at WHEEL_RATE.
+        wheel = one.load_object(eid, "wheel", collection="alf", attribute=["timestamps", "position"],
+                                revision=as_of)
+        position, t = interpolate_position(wheel["timestamps"], wheel["position"], freq=WHEEL_RATE)
+        return {
+            "trials": session.trials.rename_axis("trial_id").reset_index(),  # row number -> trial_id
+            "units": units,
+            "spike_times": spike_times,
+            "spike_neuron": spike_neuron,
+            "wheel": {"t": t, "position": position},
+            "cameras": {camera: {"t": me.times.to_numpy(), "whisker": me.whiskerMotionEnergy.to_numpy(float)}
+                        for camera, me in session.motion_energy.items()},
+            "lick_times": one.load_dataset(eid, "licks.times.npy", collection="alf", revision=as_of),
+        }
+    finally:  # also when the session can't be read
+        shutil.rmtree(one.eid2path(eid), ignore_errors=True)

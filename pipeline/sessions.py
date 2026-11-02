@@ -33,8 +33,6 @@ MIN_NEURONS_PER_SESSION = 5     # Posani-Wang code: sessions with fewer neurons 
 
 # ---- Behaviour
 WHEEL_FILTER_ORDER, WHEEL_CUTOFF = 8, 20  # IBL's wheel low-pass filter (order, Hz)
-LICK_LIKELIHOOD = 0.9                     # IBL's lick detector ignores keypoints below this likelihood
-LICK_JUMP_FRACTION = 1 / 4                # IBL's lick = tongue jump > this fraction of the jumps' std
 
 
 # ================================================================ helpers
@@ -110,10 +108,9 @@ def prepare_neurons(units, spike_times, spike_neuron, stim_times, verbose=False)
     task_rate = per_trial.mean(axis=0) / (NEURAL_BINS * DT)  # Hz
     frac_silent = (per_trial == 0).mean(axis=0)             # fraction of trials with no spikes
     rules = {
-        # Units without an area label are what the Posani-Wang atlas mapping calls
-        # "root"; "y" is a fiber tract.
+        # "root" and "void": no area (outside the brain or unassigned); "y": a fiber tract.
         "in a real brain area":                                      # Posani-Wang code
-            (units.beryl_acronym.notna() & (units.beryl_acronym != "y")).to_numpy(),
+            ~units.beryl_acronym.isin(["root", "void", "y"]).to_numpy(),
         f"session rate {MIN_FR}-{MAX_FR} Hz":                        # Posani-Wang Methods
             units.firing_rate.between(MIN_FR, MAX_FR, inclusive="neither").to_numpy(),
         f"task-window rate > {MIN_FR} Hz":                           # Posani-Wang code
@@ -131,7 +128,8 @@ def prepare_neurons(units, spike_times, spike_neuron, stim_times, verbose=False)
 
 def _sample_on_bins(t, x, stim_times):
     """Value of a continuous signal x(t) at the start of each behaviour bin:
-    (n_trials, BEHAV_BINS). Linear interpolation between samples, as the Posani-Wang code does.
+    (n_trials, BEHAV_BINS). Linear interpolation between samples, as the
+    Posani-Wang code does.
     """
     bin_starts = stim_times[:, None] + BEHAV_START + DT * np.arange(BEHAV_BINS)
     return np.interp(bin_starts, t, x)
@@ -141,49 +139,26 @@ def _wheel_velocity(t, position):
     """Wheel velocity (rad/s) from position sampled uniformly at 100 Hz.
 
     Same as IBL's brainbox.behavior.wheel.velocity_filtered, which the
-    Posani-Wang code uses: low-pass the position (8th-order Butterworth, 20 Hz, forwards and
-    backwards so there is no delay), then take the derivative.
+    Posani-Wang code uses: low-pass the position (8th-order Butterworth, 20 Hz,
+    forwards and backwards so there is no delay), then take the derivative.
     """
     fs = 1 / np.median(np.diff(t))
     sos = butter(WHEEL_FILTER_ORDER, WHEEL_CUTOFF / (fs / 2), btype="lowpass", output="sos")
     return np.gradient(sosfiltfilt(sos, position), t)
 
 
-def _detect_licks(t, tongue):
-    """Lick times from the tongue keypoints of one camera.
-
-    Same as IBL's brainbox.behavior.dlc.get_licks, which produced the lick
-    times Posani-Wang used: ignore keypoints tracked with likelihood < 0.9, then
-    call a frame a lick event when any tongue coordinate jumps by more than a
-    quarter of its typical frame-to-frame change (std of the differences).
-    """
-    events = []
-    for tip in ("tongue_end_l", "tongue_end_r"):
-        reliable = tongue[f"{tip}_likelihood"] >= LICK_LIKELIHOOD
-        for coord in ("x", "y"):
-            x = tongue[f"{tip}_{coord}"].where(reliable).to_numpy()
-            jump = np.abs(np.diff(x))
-            events.append(np.flatnonzero(jump > np.nanstd(jump) * LICK_JUMP_FRACTION))
-    return t[np.unique(np.concatenate(events))]
-
-
-def prepare_behaviour(wheel, cameras, stim_times):
+def prepare_behaviour(wheel, cameras, lick_times, stim_times):
     """Wheel velocity, whisker motion energy and lick counts of one session.
 
-    `wheel` and `cameras` are as returned by ibl.load_session. Each output is
-    an array (n_trials, BEHAV_BINS).
+    `wheel`, `cameras` and `lick_times` are as returned by ibl.load_session.
+    Each output is an array (n_trials, BEHAV_BINS).
     """
     wheel = _sample_on_bins(wheel["t"], _wheel_velocity(wheel["t"], wheel["position"]), stim_times)
-
-    whisker, lick_times = [], []
-    for camera in cameras.values():
-        t, features = camera["t"], camera["features"]
-        whisker.append(_sample_on_bins(t, features.whiskerMotionEnergy.to_numpy(float), stim_times))
-        lick_times.append(_detect_licks(t, features))
     # One whisker signal: the larger of the two cameras at each time (Posani-Wang code).
-    whisker = np.maximum(*whisker)
-    # Licks seen by either camera, counted per bin (as IBL combines the two cameras).
-    lick_times = np.unique(np.concatenate(lick_times))
+    whisker = np.maximum(*[_sample_on_bins(camera["t"], camera["whisker"], stim_times)
+                           for camera in cameras.values()])
+    # IBL's lick times (both cameras combined), counted per bin (Posani-Wang code).
+    lick_times = np.sort(lick_times)
     licks = _count_in_bins(lick_times, np.zeros(len(lick_times), int), 1,
                           stim_times, BEHAV_START, BEHAV_BINS)[:, :, 0]
     return {"wheel": wheel, "whisker": whisker, "lick": licks}

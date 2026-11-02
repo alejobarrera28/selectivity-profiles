@@ -12,8 +12,11 @@ comes from, in [sources.md](sources.md).
 
 ## Sessions
 
-`pipeline/sessions.py` (with the raw data read by `pipeline/ibl.py`) goes
-through the dataset's sessions and, for each one:
+`pipeline/ibl.py` reads each of the dataset's sessions from IBL's server, each
+file in its last revision dated on or before the dataset's date: the trials table, each probe's neurons
+(all units, or only IBL's good units) with their spikes and Beryl area, the
+wheel position (interpolated at 100 Hz), each camera's whisker motion energy,
+and IBL's lick times. `pipeline/sessions.py` then, for each session:
 
 - Trials (`prepare_trials`): keep trials where the mouse made a choice, moved
   after the stimulus, and started and finished its response within 0.8 s;
@@ -21,8 +24,8 @@ through the dataset's sessions and, for each one:
 - Neurons (`prepare_neurons`): count spikes in 100 bins of 10 ms, from -0.2 to
   0.8 s around the stimulus. Keep neurons in a real brain area, with a session
   firing rate between 0.5 and 50 Hz, a rate above 0.5 Hz in that window, and
-  spikes in at least half of the trials. Units with no area label in the local
-  data are what Posani-Wang's atlas mapping calls "root", so they are dropped.
+  spikes in at least half of the trials. Units in "root" or "void" (no area)
+  or in "y" (a fiber tract) are dropped.
   All brain areas are kept, not only cortex: the model's temporal bases are
   shared by every neuron, so Posani-Wang fits it on all neurons and only picks
   cortex at the end. Sessions with fewer than 5 neurons are skipped.
@@ -39,8 +42,8 @@ Each session is saved to `outputs/<dataset>/sessions/<eid>.npz`, with raw values
   `feedbackType`: one value per trial, as in IBL's trials table. A missing
   (NaN) contrast means no stimulus on that side; choice +1 is a clockwise
   wheel turn and -1 counter-clockwise; feedbackType +1 is a reward.
-- `area`, `pid`, `cluster_id`: one value per neuron (Beryl area acronym,
-  probe id, IBL cluster id).
+- `area`, `pid`, `cluster_id`, `uuid`: one value per neuron (Beryl area
+  acronym, probe id, IBL cluster id, IBL's id of the neuron).
 - `dt`, `neural_start`, `behav_start`: the time axis (0.01 s bins, starting
   0.2 s before the stimulus for the spikes and 0.3 s for the behaviour). Later
   stages read it from here instead of redefining it.
@@ -111,7 +114,7 @@ Each session is saved to `outputs/<dataset>/inputs/<eid>.npz`:
   (smoothed) spike counts.
 - `wheel_cross_corr`, `whisker_cross_corr`, `lick_cross_corr`: each
   movement's cross-correlation for every shift (for the check figure).
-- `variables`, `area`, `pid`, `cluster_id`, `dt`, `neural_start`: names of
+- `variables`, `area`, `pid`, `cluster_id`, `uuid`, `dt`, `neural_start`: names of
   X's columns, the neuron table and the time axis, passed on from the sessions stage.
 
 Results: the chosen shifts (`results/shifts.csv`,
@@ -228,7 +231,7 @@ defines their selectivity.
 
 Output, in `outputs/<dataset>/profiles/`:
 
-- `table.csv`: one row per neuron: `eid`, `pid`, `cluster_id`, `area`,
+- `table.csv`: one row per neuron: `eid`, `pid`, `cluster_id`, `uuid`, `area`,
   `r2_rrr`, `r2_null`, `delta_r2`, `selected`.
 - `beta.npy`: the coefficients of the final fit, beta = U @ V,
   (neurons, 8 variables, 100 time bins), in the same row order as the table.
