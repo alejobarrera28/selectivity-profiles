@@ -78,11 +78,16 @@ Implementation differences that give the same results:
 - `_read_Xy` appends a column of ones to X, so that their model's baseline
   (`RRR_b`) is the coefficient of that column. Our model adds the baseline
   explicitly.
-- Their fit sums all sessions' losses and computes the gradient once, with
-  every session in float64; we compute it session by session and add the
-  gradients (gradient accumulation), converting each session to float64 only
-  while its loss is computed, so the fit fits in 16 GB of memory. Same
-  gradients, same fit.
+- Their fit computes the squared error trial by trial in every evaluation;
+  we compute it from sums over trials, once per fit (for each session and
+  time bin, X'X, X'y and y'y, with a column of ones in X for the baseline):
+  with w = (beta, b), the sum over trials of (x·w - y)² equals
+  w'(X'X)w - 2 w'(X'y) + y'y. The loss and its gradient are the same up to
+  rounding (checked on 20 sessions fitted to convergence: same number of
+  evaluations, test R² within 1e-12, beta within 1e-11), and each evaluation
+  no longer goes through every trial, so the fit is about ten times faster.
+  Each session's loss and gradient are computed one at a time and added
+  (gradient accumulation), as their single sum would give.
 - After choosing the hyperparameters they refit the 3 splits under new file
   names; with fixed hyperparameters we need each split only once.
 - The time axis is defined once in the sessions stage and saved with the

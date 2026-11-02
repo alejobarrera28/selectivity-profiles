@@ -7,6 +7,23 @@ It is fitted (fit) in two ways:
     R² on the 30% it didn't see (cross_validated_r2). The profiles use it to
     keep the well-fit neurons.
   - once on all trials, for the coefficients (fit_all_trials) used in the profiles.
+
+The loss is the squared prediction error summed over trials, plus a ridge
+penalty (Posani-Wang Methods, eq. 7). The optimizer evaluates it hundreds of
+times per fit, once for each set of coefficients it tries. The Posani-Wang code
+predicts every trial in every evaluation. Here, expanding the square shows that
+the error depends on a session's trials only through three sums over them
+(_sums_over_trials). So each fit first computes these sums for every session,
+once, and from then on works only with them: the model is initialized from
+them, and every evaluation of the loss uses them instead of the trials. The
+loss and its gradient are the same up to rounding, at a fraction of the cost
+(docs/sources.md).
+
+What the fit receives from the data, `trial_sums`, maps each session id to its
+sums over the fitted trials, per time bin, in float64:
+  A = X'X   (time bins, 9, 9)         X: the 8 variables, plus a column of ones
+  c = X'y   (time bins, 9, neurons)   y: the activity of each neuron
+  d = y'y   (time bins, neurons)
 """
 import numpy as np
 import torch
@@ -42,25 +59,25 @@ class RRR(torch.nn.Module):
     is 1 std above usual, neuron n's activity is beta std above usual.
     """
 
-    def __init__(self, data, trials, rank):
-        """`data` maps each session id to its inputs (the inputs stage's files),
-        `trials` to the trials fitted.
-        """
+    def __init__(self, trial_sums, rank):
+        """One U and b per session in `trial_sums` (see the module docstring), and a shared V."""
         super().__init__()
         torch.manual_seed(0)
-        _, n_bins, n_variables = next(iter(data.values()))["X"].shape
+        n_bins, n_variables = next(iter(trial_sums.values()))[0].shape[:2]
+        n_variables -= 1  # the column of ones
         scale = 1 / np.sqrt(n_bins * rank)  # small random start (Posani-Wang code)
         self.V = torch.nn.Parameter(torch.randn(rank, n_bins, dtype=torch.float64) * scale)
         self.U = torch.nn.ParameterDict()
         self.b = torch.nn.ParameterDict()
-        for eid in trials:
-            _, y = _session_tensors(data[eid], trials[eid])
-            n_neurons = y.shape[2]
+        for eid, (A, c, _) in trial_sums.items():
+            n_neurons = c.shape[2]
             self.U[eid] = torch.nn.Parameter(
                 torch.randn(n_neurons, n_variables, rank, dtype=torch.float64) * scale)
-            # Start at the average response (~0). .contiguous() stores the
-            # transposed values as a plain copy, which L-BFGS requires.
-            self.b[eid] = torch.nn.Parameter(y.mean(axis=0).T.contiguous())
+            # Start at the average response (~0): the sum of y over trials (c's
+            # row for the column of ones) divided by the number of trials (A's
+            # last entry). .contiguous() stores the transposed values as a plain
+            # copy, which L-BFGS requires.
+            self.b[eid] = torch.nn.Parameter((c[:, -1, :] / A[:, -1, -1:]).T.contiguous())
 
     def beta(self, eid):
         """Time-varying coefficients of a session's neurons: (neurons, variables, time bins)."""
@@ -75,28 +92,63 @@ class RRR(torch.nn.Module):
 
 # ================================================================ fitting
 
-def _session_tensors(session, trials):
-    """(X, y) of one session's trials, in float64 (Posani-Wang code)."""
-    return (torch.tensor(session["X"][trials], dtype=torch.float64),
-            torch.tensor(session["y"][trials], dtype=torch.float64))
+def _sums_over_trials(session, trials):
+    """The sums over one session's trials that its squared error depends on, per time bin, in float64.
+
+    For one neuron and time bin, let x_k be the 8 variables of trial k plus a 1
+    (so that the baseline b enters like a coefficient), y_k the neuron's
+    activity, and w = (beta, b) its 9 coefficients. Expanding the square and
+    summing over trials:
+
+        sum_k (x_k·w - y_k)²  =  w'Aw - 2c'w + d,   with  A = sum_k x_k x_k'  (X'X)
+                                                          c = sum_k y_k x_k   (X'y)
+                                                          d = sum_k y_k²      (y'y)
+
+    A, c and d depend only on the data, not on w: they are computed here once
+    per fit, and every evaluation of the loss (_session_loss) uses them instead
+    of going through the trials. A is the same for all of a session's neurons.
+    Returns X'X (bins, 9, 9), X'y (bins, 9, neurons) and y'y (bins, neurons).
+    """
+    x = torch.tensor(session["X"][trials], dtype=torch.float64)    # (trials, bins, 8)
+    y = torch.tensor(session["y"][trials], dtype=torch.float64)    # (trials, bins, neurons)
+    x = torch.cat([x, torch.ones_like(x[:, :, :1])], dim=2)        # (trials, bins, 9)
+    return (torch.einsum("ktv,ktw->tvw", x, x),
+            torch.einsum("ktv,ktn->tvn", x, y),
+            (y ** 2).sum(axis=0))
 
 
-def _session_loss(model, eid, x, y, l2):
+def _trial_sums(data, trials):
+    """`trial_sums` (see the module docstring) for every session in `trials`.
+
+    `data` maps each session id to its inputs (the inputs stage's files),
+    `trials` to the trials fitted.
+    """
+    return {eid: _sums_over_trials(data[eid], trials[eid]) for eid in trials}
+
+
+def _session_loss(model, eid, session_sums, l2):
     """Squared prediction error plus ridge penalty on the betas, for one session.
 
     Posani-Wang Methods, eq. 7. The baseline b is not penalized (Posani-Wang code).
+    The error is computed from the session's sums over trials, `session_sums`
+    = (A, c, d) (_sums_over_trials), as w'Aw - 2c'w + d for each neuron and
+    time bin, which equals the sum over trials of its squared prediction errors.
     """
-    error = ((model.predict(eid, x) - y) ** 2).sum()
+    A, c, d = session_sums
+    w = torch.cat([model.beta(eid), model.b[eid][:, None, :]], dim=1)   # (neurons, 9, bins)
+    error = (torch.einsum("nvt,tvw,nwt->", w, A, w)
+             - 2 * torch.einsum("nvt,tvn->", w, c)
+             + d.sum())
     penalty = l2 * (model.beta(eid) ** 2).sum()
     return error + penalty
 
 
-def fit(model, data, trials, l2, name):
+def fit(model, trial_sums, l2, name):
     """Fit the model to all sessions at once with L-BFGS (Posani-Wang settings).
 
-    `data` maps each session id to its inputs (the inputs stage's files),
-    `trials` to the trials fitted. Shows a progress bar labelled `name`.
-    Returns the loss after every evaluation, to see how the fit converged.
+    `trial_sums` holds each session's sums over the fitted trials (see the
+    module docstring). Shows a progress bar labelled `name`. Returns the loss
+    after every evaluation, to see how the fit converged.
     """
     optimizer = torch.optim.LBFGS(model.parameters(), lr=1, max_iter=MAX_ITER,
                                   tolerance_grad=TOLERANCE_GRAD,
@@ -110,10 +162,9 @@ def fit(model, data, trials, l2, name):
         # L-BFGS calls this whenever it needs the loss and its gradient.
         optimizer.zero_grad()
         total = 0.0
-        for eid in trials:
-            # Gradient accumulation: one session at a time, so only one is in memory in float64.
-            x, y = _session_tensors(data[eid], trials[eid])
-            loss = _session_loss(model, eid, x, y, l2)
+        for eid in trial_sums:
+            # Gradient accumulation: one session's loss and gradient at a time.
+            loss = _session_loss(model, eid, trial_sums[eid], l2)
             loss.backward()
             total += loss.item()
         losses.append(total)
@@ -132,9 +183,9 @@ def fit_all_trials(data):
     `data` maps each session id to its inputs (the inputs stage's files).
     Returns the fitted model and its losses.
     """
-    all_trials = {eid: np.arange(len(d["X"])) for eid, d in data.items()}
-    model = RRR(data, all_trials, RANK)
-    losses = fit(model, data, all_trials, L2, name="final fit (all trials)")
+    trial_sums = _trial_sums(data, {eid: np.arange(len(d["X"])) for eid, d in data.items()})
+    model = RRR(trial_sums, RANK)
+    losses = fit(model, trial_sums, L2, name="final fit (all trials)")
     return model, losses
 
 
@@ -198,8 +249,9 @@ def cross_validated_r2(data, split):
     train, test = {}, {}
     for eid, d in data.items():
         train[eid], test[eid] = split_trials(d["X"], d["variables"], split)
-    model = RRR(data, train, RANK)
-    losses = fit(model, data, train, L2, name=f"split {split + 1}/{N_SPLITS}")
+    trial_sums = _trial_sums(data, train)
+    model = RRR(trial_sums, RANK)
+    losses = fit(model, trial_sums, L2, name=f"split {split + 1}/{N_SPLITS}")
     r2 ={eid: test_r2(model, eid, torch.tensor(d["X"][test[eid]], dtype=torch.float64),
                        d["y"][test[eid]], d["y_mean"], d["y_std"])
           for eid, d in data.items()}
