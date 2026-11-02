@@ -40,6 +40,15 @@ sessions tested (429 in 07dc4b76, 282 in 875c1e5c, 452 in cde63527, whose
 neuron table was revised on 2024-03-12). Their behaviour can't be checked: the
 trained model doesn't store it.
 
+One exception: in 18 of their sessions, all from the Häusser lab, IBL later
+flagged the wheel position they used as faulty (QC "CRITICAL") and replaced it,
+in a 2025 "wheel patch" whose revision is named 2024-05-06 (revisions are named
+by date, but not always the date they were made). ONE doesn't serve files
+flagged CRITICAL, so for the `shuqi` dataset these sessions have no wheel
+position; they are excluded by hand, each with its reason, in
+`data/shuqi_excluded_sessions.csv`. With IBL's current data (`mine`) they have
+the corrected wheel and are kept.
+
 ## The Posani-Wang code
 
 - Trial rules (choice, reaction and response time): `filter_trials_func` in

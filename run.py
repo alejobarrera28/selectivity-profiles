@@ -11,8 +11,9 @@ Delete a stage's folder to redo it. The sessions and inputs stages also write a
 summary table to outputs/<dataset>/results/.
 
 What goes into the pipeline is a dataset, defined in DATASETS: its data
-parameters (which sessions, IBL's data as of which date, which units). The
-method's constants are in each pipeline module, with their sources.
+parameters (which sessions, IBL's data as of which date, which units, and the
+sessions excluded by hand). The method's constants are in each pipeline module,
+with their sources.
 
 Run from the repo root: python run.py <dataset>
 """
@@ -35,6 +36,7 @@ DATASETS = {
         # The last day before 2024-03-22 reproduces their neurons (docs/sources.md).
         "as_of": "2024-03-21",
         "good_units": False,  # Posani-Wang code: every unit
+        "excluded_sessions": "data/shuqi_excluded_sessions.csv",  # by hand, each with its reason
     },
     "mine": {
         "description": "IBL's current data (2024 neuron lists), good units only",
@@ -47,9 +49,11 @@ DATASETS = {
 
 def build_sessions(dataset, out):
     """The sessions checkpoint: for each session, its selected trials, neurons and behaviour, binned."""
-    # 1. The dataset's sessions.
+    # 1. The dataset's sessions, and the ones excluded by hand.
     eids = np.load(dataset["sessions"], allow_pickle=True).astype(str)
-    print(f"Sessions: {len(eids)}")
+    excluded = (set(pd.read_csv(dataset["excluded_sessions"]).eid)
+                if "excluded_sessions" in dataset else set())
+    print(f"Sessions: {len(eids)}, excluded by hand: {len(excluded)}")
 
     # 2. For each session: read its data, prepare trials, neurons and behaviour,
     #    and save the result. Sessions saved in an earlier run are not read again.
@@ -62,6 +66,9 @@ def build_sessions(dataset, out):
             spikes = np.load(path)["spikes"]
             summary.append({"eid": eid, "status": "saved", "trials": spikes.shape[0],
                             "neurons": spikes.shape[2]})
+            continue
+        if eid in excluded:
+            summary.append({"eid": eid, "status": "excluded"})
             continue
 
         # ---- Read this session's data (skipped if IBL can't serve it, as in the Posani-Wang code)
