@@ -7,7 +7,9 @@ and what to compare our results against.
 ## Differences from Posani-Wang
 
 - Data: the `shuqi` dataset reads IBL's data as Posani-Wang had it, so it
-  differs from them only in the method. `mine` differs in two ways:
+  differs from them only in the method, except for 18 sessions excluded by
+  hand ([sources.md](sources.md)) and 11 whose data differ (Open questions).
+  `mine` differs in two ways:
   - Neurons: only IBL's "good units" (the ones that pass all its quality
     metrics), while Posani-Wang used every unit firing between 0.5 and 50 Hz.
     In their sessions that's about 5,800 cortical candidates instead of
@@ -27,12 +29,19 @@ and what to compare our results against.
   filter the whole session at once with the same filter, which avoids edge
   effects at the start and end of each trial. Small difference.
 - No hyperparameter search: Posani-Wang chooses d (number of time shapes) from
-  3-6 and lambda (ridge penalty) from 25, 75 and 200 by cross-validation. We
-  fix d = 5, the best value reported in Posani-Wang, and lambda = 75, the middle
-  of their grid (Posani-Wang doesn't report which lambda won). lambda shrinks all
-  coefficients; the area selectivity z-scores each variable across areas, so a shrinkage
-  that affects all areas alike mostly cancels out, but it can change which
-  neurons pass the profiles' threshold.
+  3-6 and lambda (ridge penalty) from 25, 75 and 200 by cross-validation, as
+  the values with the highest mean test R². We fix d = 5, the best value
+  reported in Posani-Wang, and lambda = 25 (Posani-Wang doesn't report which
+  lambda won). On the `shuqi` dataset, lambda = 25 gives a higher test R² than
+  75 (mean 0.071 against 0.059), so their criterion picks it over 75, and it
+  reproduces their trained model: mean test R² 0.071 against their 0.072, and
+  93% agreement on which neurons pass the profiles' threshold, against 80% with
+  lambda = 75. lambda shrinks all coefficients: with 25 our alpha come out
+  11-24% larger than theirs depending on the variable (16% on average; with 75,
+  4-21% smaller), with the same shape (median cosine similarity 0.996 per
+  neuron, 0.994 per session and variable). This scale is common to all areas,
+  and the area selectivity's z-score removes it exactly. Shuqi Wang (Slack,
+  2026-11-05): only the relative magnitudes of alpha matter, not their scale.
 
 Implementation differences that don't change results are listed in
 [sources.md](sources.md) (the baseline added explicitly instead of through a
@@ -69,7 +78,7 @@ These come from Posani-Wang's method, which we copy on purpose.
 
 Possible sensitivity tests: a best shift per neuron (how much they spread
 within a session); a wider shift range (needs a wider behaviour window in the
-sessions stage); lambda = 25 and 200; subtracting each area's alpha with the variable
+sessions stage); lambda = 75 and 200; subtracting each area's alpha with the variable
 shuffled across trials.
 
 ## What to compare our results against
@@ -86,20 +95,45 @@ shuffled across trials.
   overall pattern is what to compare.
 - Their pre-trained model (`trained_RRR_model/RRR_selectivity.json`, 1.27 GB,
   stored with Git LFS) has each neuron's IBL id, coefficients, R² and null R²,
-  so the `shuqi` dataset can be compared with it neuron by neuron.
+  so the `shuqi` dataset can be compared with it neuron by neuron
+  (`analyses/compare_posani_wang.py`; results in [pipeline.md](pipeline.md),
+  Validation against Posani-Wang's model).
 
 ## Open questions
 
+- 11 of Posani-Wang's sessions don't match ours in the `shuqi` dataset (the
+  red sessions of `analyses/compare_posani_wang.py`): 28338153, 29a6def1,
+  2d9bfc10, 3bcb81b4, 5c0c560e, 642c97ea, 7cc74598, caa5dddc, ebce500b,
+  f4eb56a4, f56194bc. What is known:
+  - They are exactly the sessions of their list recorded in 2023: 10 from the
+    Steinmetz lab (mice NR_0024, NR_0028, NR_0031, Jan-Jul 2023) and 1 from
+    the Churchland lab at UCLA (MFD_09, Oct 2023). The 11 Steinmetz sessions of
+    2022, with the same probe type (3B2), match exactly.
+  - We have 3-8 times more neurons there (3,494 that they don't have), and
+    they have 348 that we don't. The neurons both have give different
+    results, even the null model's R², which has no fit: in their version the
+    activity of each trial differs from ours, so either the trial times or
+    the spike times of those sessions differ. Without their data it can't be
+    told which.
+  - Often a neuron's R² is near 0 in one version and clearly above in the
+    other, both ways (null model: 40% of the 370 with R² > 0.1 in either;
+    never in the other sessions). Their profiles agree with ours at chance
+    level (cosine similarity 0.785 per session and variable, 0.78 with the
+    neurons shuffled; signed beta over time, 0.04).
+  - In our version they look right: the wheel separates by choice after the
+    stimulus in all 11, and the population responds to the stimulus in 8
+    (weakly in 28338153, 7cc74598 and ebce500b). The trials' revision of
+    2024-07-15 doesn't change them.
+  Sent to Shuqi Wang (2026-11-05); Liam Paninski suggests asking Olivier at
+  IBL if it stays unresolved.
 - Fig. 2b: Posani-Wang reports a mean R² of 0.16 for the RRR and 0.09 for the
-  "PSTH per task condition". Ours, in cortex: 0.093 for the RRR and 0.068 for
-  the null model. Two things differ. Fig. 2b's baseline is an average per task
-  condition (Posani-Wang doesn't define the conditions), a stronger baseline
-  than the null model of the Methods and the Posani-Wang code (one average over
-  all trials), which is the one the selection uses. And our RRR's R² is
-  clearly lower; the cause is unknown (good units only, lambda not searched,
-  or a different set of neurons in Posani-Wang's average). Comparing the
-  `shuqi` dataset with the per-neuron `RRR_r2` and `null_r2` in Posani-Wang's
-  pre-trained model would tell.
+  "PSTH per task condition". Their own trained model gives, in cortex, 0.068
+  for the RRR and 0.050 for the null model (ours on the `shuqi` dataset: 0.067
+  and 0.049), so the gap is not in our implementation. Fig. 2b's baseline is an
+  average per task condition (Posani-Wang doesn't define the conditions), a
+  stronger baseline than the null model of the Methods and the Posani-Wang
+  code (one average over all trials), which is the one the selection uses; why
+  their published RRR R² is higher than their trained model's is unknown.
 - Why the cross-validation splits are stratified only by block and contrast
   (stated in Posani-Wang, not justified; see [pipeline.md](pipeline.md), the model).
 - Whether the lead/lag compromise of the single shift per session explains

@@ -1,0 +1,43 @@
+,value
+sessions in both,157.0
+their neurons in these sessions,57202.0
+our neurons in these sessions,60348.0
+neurons in both,56854.0
+sessions with the same neuron count,146.0
+same area,1.0
+"mean test R², ours",0.07144454706466315
+"mean test R², theirs",0.07207725630988145
+"mean null R², ours",0.052449333027752044
+"mean null R², theirs",0.052271170034046854
+"selected, ours",18154.0
+"selected, theirs",19173.0
+selected in both,16614.0
+selection agreement,0.9279030499173321
+"selection agreement, sessions with the same neurons",0.9330534926272737
+test R² correlation,0.968533061125515
+"test R² correlation, sessions with the same neurons",0.9945153881517558
+"profile cosine similarity, median",0.9963303804397583
+"population profile cosine similarity, median",0.9938925504684448
+"population profile cosine similarity, median, sessions with the same neurons",0.9942598342895508
+"areas in the figure, ours",29.0
+"areas in the figure, theirs",31.0
+area figure correlation (common areas),0.9183411833753202
+"area figure correlation, sessions with the same neurons",0.9707490454254708
+"area figure, same top areas",18.0
+"area figure, same top areas, sessions with the same neurons",22.0
+alpha block correlation,0.965264942416271
+alpha side correlation,0.9212639353886658
+alpha contrast correlation,0.9568734425289975
+alpha choice correlation,0.9593097108123028
+alpha outcome correlation,0.9781696616633617
+alpha wheel correlation,0.9582652094272981
+alpha whisker correlation,0.9845106443629489
+alpha lick correlation,0.9307644593198255
+alpha block slope (ours on theirs),1.179639243301694
+alpha side slope (ours on theirs),1.2054526096769413
+alpha contrast slope (ours on theirs),1.113314436863623
+alpha choice slope (ours on theirs),1.2418370505047855
+alpha outcome slope (ours on theirs),1.1479755891445216
+alpha wheel slope (ours on theirs),1.128004431255404
+alpha whisker slope (ours on theirs),1.1381035412385343
+alpha lick slope (ours on theirs),1.1518768270779443

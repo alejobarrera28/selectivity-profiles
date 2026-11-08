@@ -7,8 +7,9 @@ each stage ends, `run.py` draws its check figure (`analyses/checks.py`), shown
 below, and puts it with the stages' summary tables in
 `outputs/<dataset>/results/pipeline/`. The analyses in `analyses/` read the
 checkpoints and write to a folder of their own in `outputs/<dataset>/results/`:
-`area_selectivity.py`, the mean selectivity per area. The results
-below are for the `agent` dataset (the IBL agent's download). Differences from
+`area_selectivity.py`, the mean selectivity per area, and
+`compare_posani_wang.py`, the comparison with Posani-Wang's trained model. The
+results below are for the `shuqi` dataset (IBL's data as Posani-Wang had it). Differences from
 Posani-Wang are listed in [differences.md](differences.md); where each rule
 comes from, in [sources.md](sources.md).
 
@@ -50,19 +51,19 @@ Each session is saved to `outputs/<dataset>/sessions/<eid>.npz`, with raw values
   0.2 s before the stimulus for the spikes and 0.3 s for the behaviour). Later
   stages read it from here instead of redefining it.
 
-Results: 170 of the 172 sessions pass (2 have fewer than 100 trials), with
-60,528 trials and 19,728 neurons, of which 4,233 are in cortex. The first
-session's signals averaged by choice (`results/pipeline/signals_by_choice.png`) look as
-expected: the wheel turns in opposite directions for the two choices shortly
-after the stimulus, and licks follow the response. numpy prints one harmless
-warning: in a few sessions one camera never tracks a tongue tip reliably, so
-that camera finds no licks for it; the other camera still does.
+Results: 157 of the 178 sessions pass (18 excluded by hand, 3 with fewer than
+100 trials; `results/pipeline/sessions.csv`), with 55,581 trials and 60,348
+neurons, of which 14,526 are in cortex. The first session's signals averaged
+by choice (`results/pipeline/signals_by_choice.png`) look as expected: the
+wheel turns in opposite directions for the two choices shortly after the
+stimulus, and licks follow the response.
 
-![Sessions: the first session's signals, averaged by choice](../outputs/agent/results/signals_by_choice.png)
+![Sessions: the first session's signals, averaged by choice](../outputs/shuqi/results/pipeline/signals_by_choice.png)
 
-Validation: on one session (875c1e5c), Posani-Wang's trial and neuron selection
-(`filter_trials_func`, `_read_Xy`) gives the same 535 trials and the same 48
-neurons as ours.
+Validation: on one session (875c1e5c, good units only), Posani-Wang's trial and
+neuron selection (`filter_trials_func`, `_read_Xy`) gives the same 535 trials
+and the same 48 neurons as ours. Across all sessions, the neurons are compared
+with Posani-Wang's trained model below.
 
 ## Inputs
 
@@ -121,15 +122,15 @@ Each session is saved to `outputs/<dataset>/inputs/<eid>.npz`:
 
 Results: the chosen shifts (`results/pipeline/shifts.csv`,
 `results/pipeline/movement_shifts.png`) make sense: neurons tend to fire before the wheel moves
-(median +50 ms, motor commands) and after the whiskers move (median -30 ms,
-sensing the movement). The shift search fails in 37 sessions for the wheel, 27
-for whisker and 19 for lick, and these failures continue the same trends:
-almost all wheel failures want more than +100 ms, all whisker failures less
-than -100 ms. So the +-100 ms range of the Posani-Wang code is too narrow for
-some sessions; we keep it and the failure rule, to match them (see
-[differences.md](differences.md), Limitations).
+(median +40 ms, motor commands) and after the whiskers move (median -20 ms,
+sensing the movement). The shift search fails in 44 of the 157 sessions for
+the wheel, 22 for whisker and 14 for lick, and these failures continue the
+same trends: 37 of the 44 wheel failures want more than +100 ms, all whisker
+failures less than -100 ms. So the +-100 ms range of the Posani-Wang code is
+too narrow for some sessions; we keep it and the failure rule, to match them
+(see [differences.md](differences.md), Limitations).
 
-![Inputs: the movement shifts, for one session and across sessions](../outputs/agent/results/movement_shifts.png)
+![Inputs: the movement shifts, for one session and across sessions](../outputs/shuqi/results/pipeline/movement_shifts.png)
 
 Validation: on 5 sessions, against Posani-Wang's `find_bestdelay_byCC` and
 `_read_Xy`: y is identical, X equal to within 3e-7 (rounding), and every chosen
@@ -154,8 +155,9 @@ once.
 - The fit (`fit`; Posani-Wang Methods, eq. 7): minimize the squared prediction error
   plus a ridge penalty, lambda times the sum of all beta² (the baseline is not
   penalized), with L-BFGS and Posani-Wang's settings, over all sessions together.
-- No hyperparameter search: d = 5 shapes (Posani-Wang's best) and lambda = 75
-  (see [differences.md](differences.md)).
+- No hyperparameter search: d = 5 shapes (Posani-Wang's best) and lambda = 25,
+  the value their cross-validation criterion picks and that reproduces their
+  trained model (see [differences.md](differences.md)).
 - It is fitted twice over:
   - 3 times on 70% of each session's trials, measuring each neuron's R² on the
     other 30%, trials the model never saw (`cross_validated_r2`). Averaged over the 3
@@ -194,8 +196,8 @@ Output, in `outputs/<dataset>/model/`:
 Each fit is saved as soon as it is done and skipped if its file exists, so an
 interrupted run resumes where it stopped (delete `outputs/<dataset>/model/` to start over).
 
-Results: about 1 hour on a 16 GB M3 laptop. Every fit converged long before
-the 1000-iteration limit (205 to 358 evaluations). The 5 learned shapes
+Results: about half an hour on a 16 GB M3 laptop. Every fit converged long before
+the 1000-iteration limit (350 to 441 evaluations). The 5 learned shapes
 (`results/pipeline/fit.png`) are smooth and follow the task's timeline:
 flat before the stimulus, with features around the stimulus response
 (~0.1 s), the movement (~0.2-0.3 s) and after the response (~0.4 s and
@@ -203,11 +205,11 @@ later). Nothing in the model forces them to be smooth: each time bin of V is
 free, and the smoothness comes from the smoothed data, the pooling over all
 neurons and the convergence of the fit. Individual shapes are not unique
 (other sets of 5 give the same coefficients), so only the coefficients are
-interpreted. The per-neuron test R² has a median of 0.049 and a long tail up
-to ~0.7; it includes the part the average response explains, which the
+interpreted. The per-neuron test R² has a median of 0.030 and a long tail up
+to ~0.9; it includes the part the average response explains, which the
 profiles subtract.
 
-![Model: the final fit's loss, the learned time shapes, and the per-neuron test R²](../outputs/agent/results/fit.png)
+![Model: the final fit's loss, the learned time shapes, and the per-neuron test R²](../outputs/shuqi/results/pipeline/fit.png)
 
 Validation: the model, the loss and the initialization scheme follow
 Posani-Wang's `RRRGD_model`. A preliminary fit on all trials was inspected before
@@ -238,16 +240,15 @@ Output, in `outputs/<dataset>/profiles/`:
 - `beta.npy`: the coefficients of the final fit, beta = U @ V,
   (neurons, 8 variables, 100 time bins), in the same row order as the table.
 
-Results: almost every neuron is predicted better by the RRR than by the null
-model (`results/pipeline/r2_vs_null.png`). 8,335 of the 19,728 neurons are selected; in
-cortex, 1,739 of 4,233 (41%; Posani-Wang: 4,617 of about 14,000, 33%). 16
-cortical areas have at least 30 selected neurons, the minimum to appear in the
-area selectivity figure (Posani-Wang's Fig. 2c shows 31): ACAd, AId, AUDp, MOp,
-MOs, ORBvl, PL, RSPd, RSPv, SSp-bfd, SSp-m, SSp-tr, SSs, VISa, VISam, VISp.
-3,342 neurons have a negative delta R²: the RRR predicts their unseen trials
-worse than the average does, i.e. they have no real selectivity.
+Results: 19,277 of the 60,348 neurons are selected (`results/pipeline/r2_vs_null.png`); in
+cortex, 4,381 of 14,526 (30%; Posani-Wang's trained model: 4,617 of 14,283,
+32%). 29 cortical areas have at least 30 selected neurons, the minimum to
+appear in the area selectivity figure (Posani-Wang's Fig. 2c shows 31).
+16,732 neurons have a negative delta R²: the RRR predicts their unseen trials
+worse than the average does, i.e. they have no real selectivity. With all
+units, many of them are weak or noisy units.
 
-![Profiles: R² of the RRR against the null model, and delta R²](../outputs/agent/results/r2_vs_null.png)
+![Profiles: R² of the RRR against the null model, and delta R²](../outputs/shuqi/results/pipeline/r2_vs_null.png)
 
 Validation: the null model and the selection follow Posani-Wang's
 `trial_avg_r2` and `Fig2c.py`; the splits and R² are the model's own functions.
@@ -282,17 +283,43 @@ Output, in `outputs/<dataset>/results/area_selectivity/`: `area_selectivity.png`
 `area_selectivity.csv` with the z-scored values and each area's number of
 selected neurons.
 
-Results: 16 areas, from 1,403 selected cortical neurons. With 16 of
-Posani-Wang's 31 areas, the fair comparison is Posani-Wang's top-3 markers that fall
-on areas we have: 10 of those 14 are reproduced. Side (MOs, ACAd), choice
-(MOs, ACAd), outcome (AId, AUDp), wheel (PL, SSs) and lick (AUDp) match
-fully; block matches 1 of 3 (RSPd; ACAd and RSPv come just below); whisker
-matches 0 of 2 (SSs and SSp-bfd are high but not top; the frontal ORBvl and
-PL come first); none of Posani-Wang's contrast markers are in our areas (VISp
-leads among ours). The overall pattern is Posani-Wang's: frontal and motor areas
-lead the cognitive and choice variables, medial and frontal areas the block,
-somatosensory areas and AUDp the licking. Likely causes of the differences:
-fewer neurons per area (noisier averages), good units only, one movement
-shift per session, and lambda not searched.
+Results: 29 areas, from 4,189 selected cortical neurons. Compared with the
+same figure made from Posani-Wang's trained model in the validation below.
 
-![Mean absolute selectivity of each cortical area to each variable](../outputs/agent/results/area_selectivity.png)
+![Mean absolute selectivity of each cortical area to each variable](../outputs/shuqi/results/area_selectivity/area_selectivity.png)
+
+## Validation against Posani-Wang's model
+
+`analyses/compare_posani_wang.py` compares the `shuqi` dataset with
+Posani-Wang's trained model, neuron by neuron (matched by IBL id), one figure
+per step, in `outputs/shuqi/results/compare_posani_wang/` with the numbers in
+`numbers.csv`. Red, in every figure: the 11 sessions whose neurons differ
+(an open question, [differences.md](differences.md)). Where two numbers are
+given, the second leaves them out.
+
+- Data (`1_data.png`): 157 sessions in both; 56,854 of their 57,202 neurons in
+  them (99.4%), all in the same area; the same neurons in 146 sessions. Null
+  model's R²: mean 0.052 for both, r = 0.972 / 0.994.
+- Fit (`2_fit.png`): mean test R² 0.071 against 0.072, r = 0.969 / 0.995 (our
+  model against itself across the 3 splits: 0.978); delta R², r = 0.953 /
+  0.981. The selection is the same for 92.8% / 93.3% of the neurons: 16,614
+  selected by both, 1,540 only by ours, 2,559 only by theirs.
+- Profiles (`3_profiles.png`), on the 16,614 selected by both: alpha r =
+  0.92-0.98 per variable (0.93-0.99 without the red); ours 11-24% larger, from
+  lambda ([differences.md](differences.md)); each neuron's profile shape,
+  median cosine similarity 0.996 (0.817 in the red, the chance level).
+- Areas (`4_areas.png`): the area selectivity figure from their model and
+  ours. From all of each model's neurons: 31 and 29 areas, r = 0.92 on the 28
+  in both, 18 of the 24 top-3 markers shared. From the 146 sessions with the
+  same neurons: r = 0.97, 22 of 24. The areas only one figure shows come from
+  data: VISal (all of their selected neurons in sessions we don't have),
+  AUDpo (26 of 39 in those sessions, 11 in the red ones), RSPagl (33 of our 44
+  in the red ones), and AIv (26 against 30 selected neurons, at the threshold).
+- Population profiles (`5_population.png`, suggested by Shuqi Wang): for each
+  session and variable, the cosine similarity of its neurons' alpha, ours
+  against theirs: median 0.994 (minimum 0.936) in the 146 sessions, 0.785 in
+  the red ones (0.78 with the neurons shuffled: alpha are positive, so the
+  chance level is high).
+
+So the implementation reproduces Posani-Wang's model on the same data, up to
+a scale of alpha that the analyses don't use.

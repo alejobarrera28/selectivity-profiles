@@ -37,8 +37,8 @@ DATASETS = {
         "description": "Posani-Wang's data: IBL's data before the 2024 re-run, all units",
         "sessions": "data/eid_list.npy",  # the 178 sessions Posani-Wang trained on
         # Posani-Wang's trained model has neurons from a probe revised on 2022-08-04 and none
-        # from the revisions of 2024-03-22, so they downloaded the data between those dates.
-        # The last day before 2024-03-22 reproduces their neurons (docs/sources.md).
+        # from the revisions of 2024-03-22. The last day before 2024-03-22 reproduces their
+        # neurons (docs/sources.md).
         "as_of": "2024-03-21",
         "good_units": False,  # Posani-Wang code: every unit
         "excluded_sessions": "data/shuqi_excluded_sessions.csv",  # by hand, each with its reason

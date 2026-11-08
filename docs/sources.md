@@ -31,14 +31,22 @@ The date of Posani-Wang's data. IBL revises its files and keeps every version,
 each in a folder named by the revision's date. Posani-Wang's trained model gives
 each neuron's IBL id: across their sessions, their neurons come from the
 original neuron lists, except one probe from a revision of 2022-08-04, and none
-from the revisions of 2024-03-22 (50 sessions). So they downloaded the data
-between those two dates. In between, IBL revised a few of the files we use: the
-neuron tables (`clusters.metrics`: firing rate and quality label) of 32
-sessions, and the licks, camera times, motion energy or trials of 14. With the
-last day before 2024-03-22, the pipeline reproduces their neurons exactly in the
-sessions tested (429 in 07dc4b76, 282 in 875c1e5c, 452 in cde63527, whose
-neuron table was revised on 2024-03-12). Their behaviour can't be checked: the
-trained model doesn't store it.
+from the revisions of 2024-03-22 (50 sessions). Between those two dates, IBL
+revised a few of the files we use: the neuron tables (`clusters.metrics`:
+firing rate and quality label) of 32 sessions, and the licks, camera times,
+motion energy or trials of 14. With the last day before 2024-03-22, the
+pipeline reproduces their neurons: 56,854 of the 57,202 in the sessions both
+have, the same ones in 146 of the 157 sessions (the other 11 are an open
+question, [differences.md](differences.md)). Their behaviour can't be checked:
+the trained model doesn't store it.
+
+That date is not when they downloaded the data. Their repo adds the download
+script on 2024-11-10 and the trained model on 2025-03-16. A revision's name is
+not the date it reached the public server: the 2024 re-run of the neuron lists
+was still missing from it in late 2024, when they downloaded, and the wheel
+patch below, named 2024-05-06, was made in February 2025. ONE's dates go by
+the revision's name, so they can't ask for "the server as it was on a given
+day"; the date we use is the one that gives back their neurons.
 
 One exception: in 18 of their sessions, all from the Häusser lab, IBL later
 flagged the wheel position they used as faulty (QC "CRITICAL") and replaced it,

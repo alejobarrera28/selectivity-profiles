@@ -32,7 +32,8 @@ from tqdm import tqdm
 
 # ---- Model
 RANK = 5  # d, number of shared time shapes (Posani-Wang: d = 5 was best)
-L2 = 75   # lambda, ridge penalty: fixed to the middle of the Posani-Wang grid (25, 75, 200)
+L2 = 25   # lambda, ridge penalty: of the Posani-Wang grid (25, 75, 200), the value their
+          # criterion picks (highest test R²) and that reproduces their trained model
 
 # ---- Cross-validation
 N_SPLITS = 3         # Posani-Wang Methods: the split-train-test process is repeated 3 times

@@ -15,7 +15,8 @@ neuron's selectivity profile. The model follows Posani, Wang et al. (Nature
   in four stages (sessions, inputs, model, profiles), one module each in
   `pipeline/`; checkpoints in `outputs/<dataset>/`.
 - `analyses/`: scripts that read the checkpoints: check figures for each
-  stage, and the analyses (so far, mean selectivity per area).
+  stage, and the analyses (so far, mean selectivity per area, and the
+  comparison with Posani-Wang's trained model).
 - `docs/`: notes on each stage, its choices and their sources.
 
 ## Running it
@@ -36,7 +37,7 @@ Then, with the environment active:
 
 `mine` is a dataset, defined in `run.py`: which sessions, IBL's data as of
 which date, and which units. `shuqi` is Posani-Wang's data. Reading the data
-takes a few hours and fitting the model about an hour per dataset. A stage
+takes a few hours and fitting the model about half an hour per dataset. A stage
 whose output exists is skipped, and the sessions and the model's fits are
 saved one by one, so running it again after an interruption resumes where it
 left off. Figures and tables, kept in the repo, go to
