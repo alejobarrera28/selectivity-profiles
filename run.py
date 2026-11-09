@@ -33,7 +33,7 @@ RESULTS = "results/pipeline"
 # ---- Datasets: what goes into the pipeline, by name
 # as_of: for each IBL file, its last revision dated on or before that date.
 DATASETS = {
-    "shuqi": {
+    "posani_wang": {
         "description": "Posani-Wang's data: IBL's data before the 2024 re-run, all units",
         "sessions": "data/eid_list.npy",  # the 178 sessions Posani-Wang trained on
         # Posani-Wang's trained model has neurons from a probe revised on 2022-08-04 and none
@@ -41,7 +41,7 @@ DATASETS = {
         # neurons (docs/sources.md).
         "as_of": "2024-03-21",
         "good_units": False,  # Posani-Wang code: every unit
-        "excluded_sessions": "data/shuqi_excluded_sessions.csv",  # by hand, each with its reason
+        "excluded_sessions": "data/posani_wang_excluded_sessions.csv",  # by hand, each with its reason
     },
     "bwm": {
         "description": "IBL's current data (2024 neuron lists), good units only",

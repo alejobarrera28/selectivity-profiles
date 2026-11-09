@@ -1,6 +1,6 @@
 # Beyond cortex: this research's decisions
 
-The validation is done: on the `shuqi` dataset, our implementation reproduces
+The validation is done: on the `posani_wang` dataset, our implementation reproduces
 Posani-Wang's trained model ([pipeline.md](pipeline.md), Validation against
 Posani-Wang's model). From here on, the work is our own: the same engine
 applied to the whole brain, starting with the `bwm` dataset. This file
@@ -33,7 +33,7 @@ With Liam Paninski (Slack, 2026-11-08):
 
 The `bwm` dataset reads the probes of IBL's 2023_12 Brain Wide Map release:
 699 probes in 459 sessions. In each session it reads only the listed probes
-(`probes` in `run.py`); `shuqi` reads all the probes of its sessions.
+(`probes` in `run.py`); `posani_wang` reads all the probes of its sessions.
 
 What the list is. IBL's `bwm_query` selects the probes of the Brain Wide Map
 project (`ibl_neuropixel_brainwide_01`) whose session is not a mock, is not
@@ -115,14 +115,14 @@ session on a fast connection, 10 on a slow one; then about 40 minutes for the
 inputs and the model). Figures and tables in `outputs/bwm/results/pipeline/`.
 
 Results: 415 of 459 sessions, 150,363 trials, 43,940 neurons (median 90 per
-session); per-neuron test R² median 0.052 (shuqi 0.030); 19,498 neurons
-selected (44%; shuqi 32%); 123 areas with at least 30 selected neurons, 92
+session); per-neuron test R² median 0.052 (posani_wang 0.030); 19,498 neurons
+selected (44%; posani_wang 32%); 123 areas with at least 30 selected neurons, 92
 with at least 50. In cortex (the 43 areas of `data/area_list.csv`): 7,868
 neurons from 258 sessions, 3,213 selected (41%), 26 areas with at least 30
 selected (Posani-Wang's Fig. 2c: 31), 19 with at least 50. Mean R² over the
 selected cortical neurons, the measure that matches Posani-Wang's Fig. 2b
 (differences.md, Open questions): 0.178 (null 0.117), against 0.16 in
-Posani-Wang and 0.158 on `shuqi`. Half the cortical neurons of Posani-Wang
+Posani-Wang and 0.158 on `posani_wang`. Half the cortical neurons of Posani-Wang
 because of good units only, but better fitted.
 
 Checks: the check figures look as expected (wheel separates by choice,
@@ -130,7 +130,7 @@ population responds to the stimulus, smooth time shapes, most neurons above
 the diagonal of R² against the null model). Test R² is stable across the 3
 splits (correlation 0.981 between each pair, medians 0.0528, 0.0527,
 0.0527). Per cortical area (36 areas with at least 50 neurons in both), the
-fraction selected correlates 0.74 with `shuqi` and the median delta R² 0.64
+fraction selected correlates 0.74 with `posani_wang` and the median delta R² 0.64
 (different neurons: good units only, and new ids since the 2024 re-run).
 The first split's fit stopped after 187 evaluations, still improving (0.15%
 over its last 50; the others 339-378, below 0.004%): torch's L-BFGS stops on
@@ -138,10 +138,10 @@ a single step's change, as in the Posani-Wang code. Effect negligible (same
 median test R², same correlation with the other splits); kept as is, by
 decision. 7 sessions have under 5% of their neurons selected (median 45%):
 af55d16f, 3f71aa98, 752456f3, 49368f16, ebce500b (one of the 11 differing
-sessions of `shuqi`), c23b4118, 3f6e25ae; their behaviour is aligned, so
+sessions of `posani_wang`), c23b4118, 3f6e25ae; their behaviour is aligned, so
 probably weak recordings; to look at if they show up in a result.
 
-What was filtered out, against `shuqi` (the paper states the rules, not how
+What was filtered out, against `posani_wang` (the paper states the rules, not how
 much each removes):
 - Sessions: 34 without video data, 6 with under 100 trials, 4 with under 5
   neurons. The video rule is Posani-Wang's (a session needs all of wheel,
@@ -158,12 +158,12 @@ much each removes):
   `download_aggregate_tables` in IBL's bwm_loading.py); this is the check of
   the firing-rate filter below.
 - Shift searches at the edge of +-100 ms (no shift used): wheel 97 of 415
-  (23%; shuqi 28%), 84 at +100 and 13 at -100; whisker 52 (13%; shuqi 14%),
-  all at -100; lick 72 (17%; shuqi 9%), 58 at +100 and 14 at -100. Same
-  pattern as `shuqi`, lick somewhat more.
+  (23%; posani_wang 28%), 84 at +100 and 13 at -100; whisker 52 (13%; posani_wang 14%),
+  all at -100; lick 72 (17%; posani_wang 9%), 58 at +100 and 14 at -100. Same
+  pattern as `posani_wang`, lick somewhat more.
 
 Decision (Alejandro, 2026-11-09): everything is standard against the paper
-and `shuqi`, so it stays as is for now; the summary goes to Liam Paninski,
+and `posani_wang`, so it stays as is for now; the summary goes to Liam Paninski,
 and the preprocessing choices to Shuqi Wang, asking whether any is worth
 rethinking for the whole brain (the camera rule, the firing-rate filter,
 the shift range and the single shift per session).

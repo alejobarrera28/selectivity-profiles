@@ -1,6 +1,6 @@
 """Our profiles against Posani-Wang's trained model, neuron by neuron.
 
-For the `shuqi` dataset, which reads IBL's data as Posani-Wang had it. Their
+For the `posani_wang` dataset, which reads IBL's data as Posani-Wang had it. Their
 trained model gives, for each of their neurons, its IBL id, area, test R², null
 R² and coefficients beta; our neurons are matched to theirs by IBL id. One
 figure per step of the comparison, each titled with what it shows:

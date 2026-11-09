@@ -6,7 +6,7 @@ and what to compare our results against.
 
 ## Differences from Posani-Wang
 
-- Data: the `shuqi` dataset reads IBL's data as Posani-Wang had it, so it
+- Data: the `posani_wang` dataset (named `shuqi` until 2026-11-09) reads IBL's data as Posani-Wang had it, so it
   differs from them only in the method, except for 18 sessions excluded by
   hand ([sources.md](sources.md)) and 11 whose data differ (Open questions).
   `bwm` (named `mine` until 2026-11-08) differs in two ways (and in its
@@ -33,7 +33,7 @@ and what to compare our results against.
   3-6 and lambda (ridge penalty) from 25, 75 and 200 by cross-validation, as
   the values with the highest mean test R². We fix d = 5, the best value
   reported in Posani-Wang, and lambda = 25 (Posani-Wang doesn't report which
-  lambda won). On the `shuqi` dataset, lambda = 25 gives a higher test R² than
+  lambda won). On the `posani_wang` dataset, lambda = 25 gives a higher test R² than
   75 (mean 0.071 against 0.059), so their criterion picks it over 75, and it
   reproduces their trained model: mean test R² 0.071 against their 0.072, and
   93% agreement on which neurons pass the profiles' threshold, against 80% with
@@ -96,13 +96,13 @@ shuffled across trials.
   overall pattern is what to compare.
 - Their pre-trained model (`trained_RRR_model/RRR_selectivity.json`, 1.27 GB,
   stored with Git LFS) has each neuron's IBL id, coefficients, R² and null R²,
-  so the `shuqi` dataset can be compared with it neuron by neuron
+  so the `posani_wang` dataset can be compared with it neuron by neuron
   (`analyses/compare_posani_wang.py`; results in [pipeline.md](pipeline.md),
   Validation against Posani-Wang's model).
 
 ## Open questions
 
-- 11 of Posani-Wang's sessions don't match ours in the `shuqi` dataset (the
+- 11 of Posani-Wang's sessions don't match ours in the `posani_wang` dataset (the
   red sessions of `analyses/compare_posani_wang.py`): 28338153, 29a6def1,
   2d9bfc10, 3bcb81b4, 5c0c560e, 642c97ea, 7cc74598, caa5dddc, ebce500b,
   f4eb56a4, f56194bc. What is known:
@@ -129,14 +129,14 @@ shuffled across trials.
   IBL if it stays unresolved.
 - Fig. 2b: Posani-Wang reports a mean R² of 0.16 for the RRR and 0.09 for the
   "PSTH per task condition". Their own trained model gives, in cortex, 0.068
-  for the RRR and 0.050 for the null model (ours on the `shuqi` dataset: 0.067
+  for the RRR and 0.050 for the null model (ours on the `posani_wang` dataset: 0.067
   and 0.049), so the gap is not in our implementation. Fig. 2b's baseline is an
   average per task condition (Posani-Wang doesn't define the conditions), a
   stronger baseline than the null model of the Methods and the Posani-Wang
   code (one average over all trials), which is the one the selection uses.
   Likely answer (2026-11-09): the 0.16 is the mean over the neurons that pass
   the selection (delta R² > 0.015), not over all cortical neurons, although the
-  text says "across the whole population of neurons". On the `shuqi` dataset,
+  text says "across the whole population of neurons". On the `posani_wang` dataset,
   the mean RRR R² of the 4,381 selected cortical neurons is 0.158 (null model
   0.105); on all cortical neurons, 0.067. Their PSTH baseline (0.09) can't be
   checked the same way, since we don't compute it. On the `bwm` dataset, the

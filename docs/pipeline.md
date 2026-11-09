@@ -9,7 +9,7 @@ below, and puts it with the stages' summary tables in
 checkpoints and write to a folder of their own in `outputs/<dataset>/results/`:
 `area_selectivity.py`, the mean selectivity per area, and
 `compare_posani_wang.py`, the comparison with Posani-Wang's trained model. The
-results below are for the `shuqi` dataset (IBL's data as Posani-Wang had it). Differences from
+results below are for the `posani_wang` dataset (IBL's data as Posani-Wang had it). Differences from
 Posani-Wang are listed in [differences.md](differences.md); where each rule
 comes from, in [sources.md](sources.md).
 
@@ -58,7 +58,7 @@ by choice (`results/pipeline/signals_by_choice.png`) look as expected: the
 wheel turns in opposite directions for the two choices shortly after the
 stimulus, and licks follow the response.
 
-![Sessions: the first session's signals, averaged by choice](../outputs/shuqi/results/pipeline/signals_by_choice.png)
+![Sessions: the first session's signals, averaged by choice](../outputs/posani_wang/results/pipeline/signals_by_choice.png)
 
 Validation: on one session (875c1e5c, good units only), Posani-Wang's trial and
 neuron selection (`filter_trials_func`, `_read_Xy`) gives the same 535 trials
@@ -130,7 +130,7 @@ failures less than -100 ms. So the +-100 ms range of the Posani-Wang code is
 too narrow for some sessions; we keep it and the failure rule, to match them
 (see [differences.md](differences.md), Limitations).
 
-![Inputs: the movement shifts, for one session and across sessions](../outputs/shuqi/results/pipeline/movement_shifts.png)
+![Inputs: the movement shifts, for one session and across sessions](../outputs/posani_wang/results/pipeline/movement_shifts.png)
 
 Validation: on 5 sessions, against Posani-Wang's `find_bestdelay_byCC` and
 `_read_Xy`: y is identical, X equal to within 3e-7 (rounding), and every chosen
@@ -209,7 +209,7 @@ interpreted. The per-neuron test R² has a median of 0.030 and a long tail up
 to ~0.9; it includes the part the average response explains, which the
 profiles subtract.
 
-![Model: the final fit's loss, the learned time shapes, and the per-neuron test R²](../outputs/shuqi/results/pipeline/fit.png)
+![Model: the final fit's loss, the learned time shapes, and the per-neuron test R²](../outputs/posani_wang/results/pipeline/fit.png)
 
 Validation: the model, the loss and the initialization scheme follow
 Posani-Wang's `RRRGD_model`. A preliminary fit on all trials was inspected before
@@ -248,7 +248,7 @@ appear in the area selectivity figure (Posani-Wang's Fig. 2c shows 31).
 worse than the average does, i.e. they have no real selectivity. With all
 units, many of them are weak or noisy units.
 
-![Profiles: R² of the RRR against the null model, and delta R²](../outputs/shuqi/results/pipeline/r2_vs_null.png)
+![Profiles: R² of the RRR against the null model, and delta R²](../outputs/posani_wang/results/pipeline/r2_vs_null.png)
 
 Validation: the null model and the selection follow Posani-Wang's
 `trial_avg_r2` and `Fig2c.py`; the splits and R² are the model's own functions.
@@ -286,13 +286,13 @@ selected neurons.
 Results: 29 areas, from 4,189 selected cortical neurons. Compared with the
 same figure made from Posani-Wang's trained model in the validation below.
 
-![Mean absolute selectivity of each cortical area to each variable](../outputs/shuqi/results/area_selectivity/area_selectivity.png)
+![Mean absolute selectivity of each cortical area to each variable](../outputs/posani_wang/results/area_selectivity/area_selectivity.png)
 
 ## Validation against Posani-Wang's model
 
-`analyses/compare_posani_wang.py` compares the `shuqi` dataset with
+`analyses/compare_posani_wang.py` compares the `posani_wang` dataset with
 Posani-Wang's trained model, neuron by neuron (matched by IBL id), one figure
-per step, in `outputs/shuqi/results/compare_posani_wang/` with the numbers in
+per step, in `outputs/posani_wang/results/compare_posani_wang/` with the numbers in
 `numbers.csv`. Red, in every figure: the 11 sessions whose neurons differ
 (an open question, [differences.md](differences.md)). Where two numbers are
 given, the second leaves them out.

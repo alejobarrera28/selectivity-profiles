@@ -61,9 +61,9 @@ One exception: in 18 of their sessions, all from the Häusser lab, IBL later
 flagged the wheel position they used as faulty (QC "CRITICAL") and replaced it,
 in a 2025 "wheel patch" whose revision is named 2024-05-06 (revisions are named
 by date, but not always the date they were made). ONE doesn't serve files
-flagged CRITICAL, so for the `shuqi` dataset these sessions have no wheel
+flagged CRITICAL, so for the `posani_wang` dataset these sessions have no wheel
 position; they are excluded by hand, each with its reason, in
-`data/shuqi_excluded_sessions.csv`. With IBL's current data (`bwm`) they have
+`data/posani_wang_excluded_sessions.csv`. With IBL's current data (`bwm`) they have
 the corrected wheel and are kept.
 
 ## The Posani-Wang code

@@ -37,7 +37,7 @@ Then, with the environment active:
 
 `bwm` is a dataset, defined in `run.py`: which sessions, IBL's data as of
 which date, and which units. `bwm` is the IBL Brain Wide Map with IBL's
-current data, good units only; `shuqi` is Posani-Wang's data. Reading the data
+current data, good units only; `posani_wang` is Posani-Wang's data. Reading the data
 takes a few hours and fitting the model about half an hour per dataset. A stage
 whose output exists is skipped, and the sessions and the model's fits are
 saved one by one, so running it again after an interruption resumes where it
