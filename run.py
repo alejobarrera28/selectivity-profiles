@@ -12,8 +12,8 @@ figure (analyses/checks.py), and the sessions and inputs stages write a summary
 table, all in outputs/<dataset>/results/pipeline/.
 
 What goes into the pipeline is a dataset, defined in DATASETS: its data
-parameters (which sessions, IBL's data as of which date, which units, and the
-sessions excluded by hand). The method's constants are in each pipeline module,
+parameters (which sessions or probes, IBL's data as of which date, which units,
+and the sessions excluded by hand). The method's constants are in each pipeline module,
 with their sources.
 
 Run from the repo root: python run.py <dataset>
@@ -43,9 +43,11 @@ DATASETS = {
         "good_units": False,  # Posani-Wang code: every unit
         "excluded_sessions": "data/shuqi_excluded_sessions.csv",  # by hand, each with its reason
     },
-    "mine": {
+    "bwm": {
         "description": "IBL's current data (2024 neuron lists), good units only",
-        "sessions": "data/eid_list.npy",
+        # The Brain Wide Map's 459 sessions, and in each only its probes that pass IBL's
+        # quality control (699 probes; docs/beyond_cortex.md).
+        "probes": "data/bwm_2023_12_release.csv",
         "as_of": "2026-11-01",  # when this dataset was defined: later revisions don't change it
         "good_units": True,     # only the units that pass all of IBL's quality metrics
     },
@@ -54,8 +56,14 @@ DATASETS = {
 
 def build_sessions(dataset, out):
     """The sessions checkpoint: for each session, its selected trials, neurons and behaviour, binned."""
-    # 1. The dataset's sessions, and the ones excluded by hand.
-    eids = np.load(dataset["sessions"], allow_pickle=True).astype(str)
+    # 1. The dataset's sessions (and, if given, which probes of each), and the ones excluded by hand.
+    if "probes" in dataset:
+        probes = pd.read_csv(dataset["probes"])
+        eids = probes.eid.unique()
+        pids = probes.groupby("eid").pid.apply(list).to_dict()
+    else:  # every probe of each session
+        eids = np.load(dataset["sessions"], allow_pickle=True).astype(str)
+        pids = {}
     excluded = (set(pd.read_csv(dataset["excluded_sessions"]).eid)
                 if "excluded_sessions" in dataset else set())
     print(f"Sessions: {len(eids)}, excluded by hand: {len(excluded)}")
@@ -78,7 +86,7 @@ def build_sessions(dataset, out):
 
         # ---- Read this session's data (skipped if IBL can't serve it, as in the Posani-Wang code)
         try:
-            raw = ibl.load_session(eid, dataset["as_of"], dataset["good_units"])
+            raw = ibl.load_session(eid, dataset["as_of"], dataset["good_units"], pids.get(eid))
         except Exception as error:
             print(f"{i + 1:3d}/{len(eids)} {eid}: skipped, {type(error).__name__}: {error}")
             summary.append({"eid": eid, "status": "no data"})

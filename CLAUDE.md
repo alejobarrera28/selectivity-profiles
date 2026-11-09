@@ -17,7 +17,7 @@ Posani-Wang paper or code, or to a recorded decision of ours.
 
 The implementation has been validated against Posani-Wang's trained model (the
 `shuqi` dataset). The work now is our own research on the whole brain (the
-`mine` dataset): its decisions, and the Posani-Wang choices still to be
+`bwm` dataset): its decisions, and the Posani-Wang choices still to be
 checked on the new data, are in docs/beyond_cortex.md.
 
 ## Conventions

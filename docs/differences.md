@@ -9,7 +9,8 @@ and what to compare our results against.
 - Data: the `shuqi` dataset reads IBL's data as Posani-Wang had it, so it
   differs from them only in the method, except for 18 sessions excluded by
   hand ([sources.md](sources.md)) and 11 whose data differ (Open questions).
-  `mine` differs in two ways:
+  `bwm` (named `mine` until 2026-11-08) differs in two ways (and in its
+  sessions, [beyond_cortex.md](beyond_cortex.md)):
   - Neurons: only IBL's "good units" (the ones that pass all its quality
     metrics), while Posani-Wang used every unit firing between 0.5 and 50 Hz.
     In their sessions that's about 5,800 cortical candidates instead of

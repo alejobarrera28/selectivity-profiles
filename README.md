@@ -32,11 +32,12 @@ Create the environment once, from this folder:
 
 Then, with the environment active:
 
-    caffeinate -i python run.py mine            # the pipeline (macOS: caffeinate keeps the Mac awake)
-    python -m analyses.area_selectivity mine    # mean selectivity per area
+    caffeinate -i python run.py bwm            # the pipeline (macOS: caffeinate keeps the Mac awake)
+    python -m analyses.area_selectivity bwm    # mean selectivity per area
 
-`mine` is a dataset, defined in `run.py`: which sessions, IBL's data as of
-which date, and which units. `shuqi` is Posani-Wang's data. Reading the data
+`bwm` is a dataset, defined in `run.py`: which sessions, IBL's data as of
+which date, and which units. `bwm` is the IBL Brain Wide Map with IBL's
+current data, good units only; `shuqi` is Posani-Wang's data. Reading the data
 takes a few hours and fitting the model about half an hour per dataset. A stage
 whose output exists is skipped, and the sessions and the model's fits are
 saved one by one, so running it again after an interruption resumes where it

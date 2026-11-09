@@ -79,17 +79,20 @@ def _probe_units(eid, probe, as_of):
     return units, spikes["times"], spikes["clusters"]
 
 
-def _session_units(eid, as_of, good_units):
-    """Merge the neurons and spikes of all probes of a session into one table and one list.
+def _session_units(eid, as_of, good_units, pids=None):
+    """Merge the neurons and spikes of a session's probes into one table and one list.
 
-    With good_units, only the units IBL labels good, and their spikes, are kept.
+    All its probes, or only those in `pids`. With good_units, only the units
+    IBL labels good, and their spikes, are kept.
     Returns `units` (one row per neuron, with its probe id `pid`), `times`
     (seconds, sorted) and `neuron` (row position in `units` of the neuron that
     fired each spike).
     """
-    pids, probes = _one().eid2pid(eid)  # the session's probes: ids and names (probe00, ...)
+    session_pids, probes = _one().eid2pid(eid)  # the session's probes: ids and names (probe00, ...)
     units, times, neuron = [], [], []
-    for pid, probe in zip(pids, probes):
+    for pid, probe in zip(session_pids, probes):
+        if pids is not None and str(pid) not in pids:
+            continue
         probe_units, spike_times, spike_cluster = _probe_units(eid, probe, as_of)
         keep = (probe_units.label == GOOD_LABEL).to_numpy() if good_units else np.ones(len(probe_units), bool)
         # Row of each kept cluster in the session's table (-1: not kept). The rows
@@ -108,8 +111,10 @@ def _session_units(eid, as_of, good_units):
 
 # ================================================================ session
 
-def load_session(eid, as_of, good_units):
+def load_session(eid, as_of, good_units, pids=None):
     """Everything the pipeline uses from one session, each file as of the date `as_of`.
+
+    The neurons come from all the session's probes, or only those in `pids`.
 
     Returns a dict with:
       trials        the session's trials table, one row per trial (trial_id: its index)
@@ -127,7 +132,7 @@ def load_session(eid, as_of, good_units):
         session = SessionLoader(one=one, eid=eid, revision=as_of)
         session.load_trials()
         session.load_motion_energy(views=["left", "right"])
-        units, spike_times, spike_neuron = _session_units(eid, as_of, good_units)
+        units, spike_times, spike_neuron = _session_units(eid, as_of, good_units, pids)
         # The wheel's position is recorded at irregular times (at each tick of its
         # encoder): IBL's interpolate_position resamples it at WHEEL_RATE.
         wheel = one.load_object(eid, "wheel", collection="alf", attribute=["timestamps", "position"],

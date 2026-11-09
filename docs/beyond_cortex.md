@@ -3,7 +3,7 @@
 The validation is done: on the `shuqi` dataset, our implementation reproduces
 Posani-Wang's trained model ([pipeline.md](pipeline.md), Validation against
 Posani-Wang's model). From here on, the work is our own: the same engine
-applied to the whole brain, starting with the `mine` dataset. This file
+applied to the whole brain, starting with the `bwm` dataset. This file
 records the decisions taken for it, and with whom and when, and the choices
 we keep from Posani-Wang for now even though they were made for cortex,
 each with how to check it on the new data. [differences.md](differences.md)
@@ -17,9 +17,9 @@ With Liam Paninski (Slack, 2026-11-08):
 - Sessions: every session of the IBL Brain Wide Map, unless Shuqi Wang
   objects. Posani-Wang selected sessions by cortical targets (at most 30 per
   cortical area), so other regions appear only where a probe happened to
-  cross them. The list is still to be built from IBL's official Brain Wide
-  Map list (about 459 sessions); `mine` still reads Posani-Wang's 178
-  (`data/eid_list.npy`).
+  cross them. Done with IBL's 2023_12 release of the Brain Wide Map
+  (`data/bwm_2023_12_release.csv`, provenance in [sources.md](sources.md)),
+  see "The session list" below.
 - Neurons: IBL's good units only (the ones that pass all its quality
   metrics), instead of every unit as in Posani-Wang.
 - Data version: IBL's data as of a fixed date (`as_of` in `run.py`,
@@ -29,10 +29,88 @@ With Liam Paninski (Slack, 2026-11-08):
   questions): report what we found to Shuqi Wang, and ask Olivier at IBL if
   it stays unresolved. They don't block the work.
 
+## The session list (2026-11-08)
+
+The `bwm` dataset reads the probes of IBL's 2023_12 Brain Wide Map release:
+699 probes in 459 sessions. In each session it reads only the listed probes
+(`probes` in `run.py`); `shuqi` reads all the probes of its sessions.
+
+What the list is. IBL's `bwm_query` selects the probes of the Brain Wide Map
+project (`ibl_neuropixel_brainwide_01`) whose session is not a mock, is not
+session QC CRITICAL (`session__qc__lt,50`; FAIL is allowed), and passes IBL's behaviour criteria (`extended_qc__behavior = 1`); whose probe
+is not QC CRITICAL, has its histology traced, and has its anatomical
+alignment resolved; and whose session passes 10 task QC checks in at least 90%
+of its trials, or was marked PASS by the experimenter. Run with
+`freeze="2023_12_bwm_release"` (the default), it returns the CSV of its
+release instead of querying, which is what the Brain Wide Map papers use.
+
+Why a fixed list. The server can be queried directly (`bwm_query` with
+`freeze=None` does it, paginated by Alyx's REST API), so a list is not needed
+to reach the data. But the QC fields it filters on are the database's current
+state, not versioned like the files (ONE's `as_of` doesn't apply to them), so
+the same query gives a different set as IBL revises its QC. Run on
+2026-11-08 it gave 694 probes in 456 sessions: 6 of the release's probes are
+gone (5 Witten-lab probes of 2020-09-02/03, whose sessions are now QC FAIL on
+the task checks, and one Angelaki-lab probe of session 288bfbf3, now probe QC
+CRITICAL) and one is new (a Hofer-lab probe, 19baa84c). The release is fixed,
+official and comparable with IBL's own analyses, and matches the fixed
+cutoff decided with Liam.
+
+Checks (2026-11-08): the copy is the same file as IBL's repo (same SHA-1,
+433162ec, on its main branch and at the installed commit); every one of its
+459 sessions is on the public server; 458 of them have exactly the listed
+probes, and the other (dfd8e7df) has one more, f936a701, which is probe QC
+CRITICAL, so leaving it out is right. Against Posani-Wang: 172 of their 178
+sessions are in it, and in those, every probe they read (all the session's
+probes, `eid2pid` in their `utils/download_data.py`) is listed, so on their
+sessions the list is a superset. Their other 6 (30c4e2ab, 754b74d5,
+b03fbc44, c51f34d8, d9f0c293, f140a2ec) are Brain Wide Map project sessions
+in none of IBL's releases (2022_10 or 2023_12), all session QC FAIL today
+(c51f34d8's probe also CRITICAL). How they built their list isn't in their
+repo; their Methods select sessions by cortical targets. Loading one session with its listed probe and good units only works
+(45 s). To watch on the first run: the probe now CRITICAL (7dcd74a9, session
+288bfbf3) may not be served by ONE, which hides files flagged CRITICAL; if
+so, the session shows up as "no data" in the sessions summary.
+
+The list fixes which probes; their files are read as of `as_of`
+(2026-11-01), so with IBL's latest revisions up to then. IBL's own Brain Wide
+Map code (`bwm_loading.py` on its main branch) instead pins older ones: the
+spike sorting at revision 2024-05-06 and the trials before 2024-07-10
+(`MODIFIED_BEFORE`), so its papers' data lack the later corrections that
+`bwm` has. Its later "releases" (tags 2024_Q2 and 2026_Q2) are aggregate
+tables of trials and units, not new session lists: the list stays 2023_12.
+
+What the list leaves out (2026-11-08), to judge whether it should be the
+method. On the public server, the Brain Wide Map project has 742 probes in 501
+sessions; the release keeps 699 in 459. The other 43 probes, each in a
+different session (mostly 2020-2021), all fail at least one of the query's
+criteria: 30 IBL's behaviour criteria (`extended_qc.behavior`, the mouse's
+performance in that session), 14 the task QC checks, 12 probe QC CRITICAL, 12
+alignment not resolved (so their neurons' areas aren't reliable), 5 session
+QC CRITICAL; one (19baa84c) passes today, after the release. Posani-Wang's 6
+sessions outside the list are among them: 5 only for the behaviour criteria,
+c51f34d8 for its probe CRITICAL. Outside the project, the server has other
+IBL experiments with probes (1,393 sessions in all), different on purpose:
+`angelaki_mouseASD` (155 sessions, the same task in mouse models of autism),
+the Witten lab's dopamine photometry (`witten_learning_dop`, `witten_dop`,
+over 500, another task), `churchland_learninglifespan` (28, learning and
+age), `serotonin_inference` (46, optogenetic stimulation); they are not
+missing sessions, and adding them would mix populations. Conclusion: nothing
+is left out by accident; each exclusion is an explicit QC criterion. The one
+open to discussion is the behaviour criteria: a session where the mouse
+performed below IBL's criterion can still have more than 100 valid trials and
+good neural data, and Posani-Wang included some. Open decision, not raised
+with Liam yet; adding those sessions later only reads the new ones.
+
+Alternatives, not taken: the query run today and saved by code as a new list
+(IBL's latest QC, but not comparable with its papers and drifting with each
+rerun); or criteria of our own (e.g. every probe of the project with our own
+QC).
+
 ## Kept from Posani-Wang for now
 
 Liam wasn't asked about these. We keep Posani-Wang's choice, and revisit it if
-the check shows a problem on the `mine` data.
+the check shows a problem on the `bwm` data.
 
 - Firing-rate filter, 0.5-50 Hz (`MIN_FR`, `MAX_FR` in
   `pipeline/sessions.py`). In cortex the upper limit mostly removes

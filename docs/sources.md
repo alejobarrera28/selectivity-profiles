@@ -19,6 +19,15 @@ the Posani-Wang code; this file says where to find it.
 - `data/area_list.csv`: the 43 cortical areas Posani-Wang analyses, in hierarchy
   order. Copied unchanged from the same place. Both files: Copyright (c) 2026
   Shuqi Wang, MIT License.
+- `data/bwm_2023_12_release.csv`: the probes of the IBL Brain Wide Map, its
+  2023_12 release (699 probes in 459 sessions, recorded 2019-11-26 to
+  2023-10-19), for the `bwm` dataset. Copied unchanged from IBL's repo for the
+  Brain Wide Map paper (https://github.com/int-brain-lab/paper-brain-wide-map,
+  `brainwidemap/fixtures/2023_12_bwm_release.csv`, added 2023-12-19 in commit
+  7c30b9b, "new release", unchanged since; the same bytes as in commit
+  de37454, installed in our environment). It is the default output of IBL's
+  `bwm_query` (`brainwidemap/bwm_loading.py`), a frozen run of its query on
+  IBL's database; how it was checked is in [beyond_cortex.md](beyond_cortex.md).
 - The IBL data: read from IBL's public server
   (https://openalyx.internationalbrainlab.org) with IBL's ONE, each file in its
   last revision dated on or before the dataset's date (`as_of` in `run.py`), the
@@ -54,7 +63,7 @@ in a 2025 "wheel patch" whose revision is named 2024-05-06 (revisions are named
 by date, but not always the date they were made). ONE doesn't serve files
 flagged CRITICAL, so for the `shuqi` dataset these sessions have no wheel
 position; they are excluded by hand, each with its reason, in
-`data/shuqi_excluded_sessions.csv`. With IBL's current data (`mine`) they have
+`data/shuqi_excluded_sessions.csv`. With IBL's current data (`bwm`) they have
 the corrected wheel and are kept.
 
 ## The Posani-Wang code
