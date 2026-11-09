@@ -15,6 +15,11 @@ IBL's public server (`pipeline/ibl.py`). Understanding every step
 matters more than speed: each choice must be explainable and traceable to the
 Posani-Wang paper or code, or to a recorded decision of ours.
 
+The implementation has been validated against Posani-Wang's trained model (the
+`shuqi` dataset). The work now is our own research on the whole brain (the
+`mine` dataset): its decisions, and the Posani-Wang choices still to be
+checked on the new data, are in docs/beyond_cortex.md.
+
 ## Conventions
 
 - The main pipeline is `run.py <dataset>`: four stages (sessions, inputs,
@@ -37,13 +42,14 @@ Posani-Wang paper or code, or to a recorded decision of ours.
   `results/` (figures and tables) is committed.
 - Module layout: module docstring (what it does); constants at the top,
   grouped by topic (`# ---- Trials`, `# ---- Model`, ...), each with its source
-  ("Posani-Wang Methods", "Posani-Wang code"); then `# =====` sections per
-  entity, helpers prefixed with `_`, one public function per entity (`prepare_*`,
-  `fit`, ...). `run.py` has no `# =====` sections: its functions follow the
+  ("Posani-Wang Methods", "Posani-Wang code", or "ours" with its reason);
+  then `# =====` sections per entity, helpers prefixed with `_`, one public
+  function per entity (`prepare_*`, `fit`, ...). `run.py` has no `# =====` sections: its functions follow the
   pipeline's order. Mains and stage functions use numbered comments
   (`# 1. ...`) for their steps.
 - Rules that select trials or neurons are named entries of a `rules`
-  dictionary, each tagged `# Posani-Wang Methods` or `# Posani-Wang code`.
+  dictionary, each tagged `# Posani-Wang Methods`, `# Posani-Wang code` or
+  `# ours`.
 - Values decided in one stage travel with the data (e.g. the time axis `dt`,
   `neural_start`) instead of being redefined in later stages or analyses.
 - Comments explain decisions and sources, not mechanics; no comments about
@@ -58,7 +64,11 @@ Posani-Wang paper or code, or to a recorded decision of ours.
 
 - README.md: what the project is, how the code is organized, how to run it.
 - docs/pipeline.md: per stage: what and why, outputs, results, validation.
-- docs/differences.md: differences from Posani-Wang, limitations, open questions.
+- docs/beyond_cortex.md: this research's own decisions (what, why, with whom,
+  when), and the Posani-Wang choices kept for now, each with how to check it.
+  New decisions go here.
+- docs/differences.md: the record of the validation: differences from
+  Posani-Wang, limitations of their method (still valid), open questions.
 - docs/sources.md: inputs' provenance and where each rule lives in the
   Posani-Wang code.
 
@@ -69,8 +79,10 @@ readable prose; no heavy formatting.
 
 - Explain a change (what, how, why, its source) before or right after making
   it; walk through new code before committing.
-- Validate each stage against the Posani-Wang code where possible, and record
-  the result briefly in docs/pipeline.md.
+- What follows Posani-Wang is validated against their code where possible,
+  and the result recorded briefly in docs/pipeline.md. A choice of our own is
+  recorded with its reason in docs/beyond_cortex.md, and its effect checked
+  on the data.
 - A reorganization moves code verbatim: same names, docstrings, comments and
   prints; only what the move requires changes, and the diff is reviewed.
 - Never commit unreviewed code. One commit per change; ask before pushing.
