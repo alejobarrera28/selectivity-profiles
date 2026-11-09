@@ -162,6 +162,19 @@ much each removes):
   all at -100; lick 72 (17%; posani_wang 9%), 58 at +100 and 14 at -100. Same
   pattern as `posani_wang`, lick somewhat more.
 
+Area selectivity (`analyses/area_selectivity.py`, cortex only, areas with at
+least 30 selected neurons): 26 areas, 2,937 neurons. The top areas fit the
+known anatomy: contrast VISp, VISam, ORBvl; side ORBvl, MOs, VISam; choice
+PL, SSp-ll, MOs; whisker SSp-un, SSs, SSp-m; lick SSp-m, AUDp, VISal; block
+AId, RSPagl, RSPd; outcome AId, MOp, AUDp; wheel AUDd, SSp-ul, AUDv. Against
+`posani_wang`, on the 22 areas both show (z-scored again over those areas):
+r = 0.65 overall; per variable outcome 0.82, choice 0.80, contrast 0.77, lick
+0.73, side 0.72, whisker 0.66, wheel 0.48, block 0.22; 8 of the 24 top-3
+entries shared. Only in `bwm`: ACAv, ILA, SSp-un, VISal; only in
+`posani_wang`: AIp, GU, ORBl, SSp-n, VISC, VISl, VISpor. Wheel and block
+agree least; they are the variables most exposed to the shift limit (wheel)
+and to the noise floor of alpha.
+
 Decision (Alejandro, 2026-11-09): everything is standard against the paper
 and `posani_wang`, so it stays as is for now; the summary goes to Liam Paninski,
 and the preprocessing choices to Shuqi Wang, asking whether any is worth
