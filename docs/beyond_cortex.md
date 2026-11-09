@@ -107,6 +107,67 @@ Alternatives, not taken: the query run today and saved by code as a new list
 rerun); or criteria of our own (e.g. every probe of the project with our own
 QC).
 
+## First run of `bwm` (2026-11-09)
+
+The whole pipeline ran with the code as of this date (about 12 hours of
+reading the data, mostly bound by the internet connection: about 1 minute per
+session on a fast connection, 10 on a slow one; then about 40 minutes for the
+inputs and the model). Figures and tables in `outputs/bwm/results/pipeline/`.
+
+Results: 415 of 459 sessions, 150,363 trials, 43,940 neurons (median 90 per
+session); per-neuron test R² median 0.052 (shuqi 0.030); 19,498 neurons
+selected (44%; shuqi 32%); 123 areas with at least 30 selected neurons, 92
+with at least 50. In cortex (the 43 areas of `data/area_list.csv`): 7,868
+neurons from 258 sessions, 3,213 selected (41%), 26 areas with at least 30
+selected (Posani-Wang's Fig. 2c: 31), 19 with at least 50. Mean R² over the
+selected cortical neurons, the measure that matches Posani-Wang's Fig. 2b
+(differences.md, Open questions): 0.178 (null 0.117), against 0.16 in
+Posani-Wang and 0.158 on `shuqi`. Half the cortical neurons of Posani-Wang
+because of good units only, but better fitted.
+
+Checks: the check figures look as expected (wheel separates by choice,
+population responds to the stimulus, smooth time shapes, most neurons above
+the diagonal of R² against the null model). Test R² is stable across the 3
+splits (correlation 0.981 between each pair, medians 0.0528, 0.0527,
+0.0527). Per cortical area (36 areas with at least 50 neurons in both), the
+fraction selected correlates 0.74 with `shuqi` and the median delta R² 0.64
+(different neurons: good units only, and new ids since the 2024 re-run).
+The first split's fit stopped after 187 evaluations, still improving (0.15%
+over its last 50; the others 339-378, below 0.004%): torch's L-BFGS stops on
+a single step's change, as in the Posani-Wang code. Effect negligible (same
+median test R², same correlation with the other splits); kept as is, by
+decision. 7 sessions have under 5% of their neurons selected (median 45%):
+af55d16f, 3f71aa98, 752456f3, 49368f16, ebce500b (one of the 11 differing
+sessions of `shuqi`), c23b4118, 3f6e25ae; their behaviour is aligned, so
+probably weak recordings; to look at if they show up in a result.
+
+What was filtered out, against `shuqi` (the paper states the rules, not how
+much each removes):
+- Sessions: 34 without video data, 6 with under 100 trials, 4 with under 5
+  neurons. The video rule is Posani-Wang's (a session needs all of wheel,
+  whisker and licks; whisker is the larger of the two side cameras' motion
+  energy). The 34 are uneven across labs: Zador 14 of 37 sessions, Witten 8
+  of 37, Cortexlab 5, others 0-2. 18 lack one camera only (9 Zador right, 5
+  Witten left, 2 Churchland UCLA left, 1 Angelaki left, 1 Cortexlab right)
+  and could be recovered by using the other camera; 16 also lack licks.
+- Trials: 150,363 kept, about 362 per session, with the paper's rules.
+- Neurons: the per-rule counts are only printed for the first session, so
+  how many good units each rule removed, and in which regions, is unknown.
+  It can be computed without the spikes for the session firing-rate rule,
+  from IBL's units table (aggregate clusters table, tag 2026_Q2_IBL_et_al_BWM,
+  `download_aggregate_tables` in IBL's bwm_loading.py); this is the check of
+  the firing-rate filter below.
+- Shift searches at the edge of +-100 ms (no shift used): wheel 97 of 415
+  (23%; shuqi 28%), 84 at +100 and 13 at -100; whisker 52 (13%; shuqi 14%),
+  all at -100; lick 72 (17%; shuqi 9%), 58 at +100 and 14 at -100. Same
+  pattern as `shuqi`, lick somewhat more.
+
+Decision (Alejandro, 2026-11-09): everything is standard against the paper
+and `shuqi`, so it stays as is for now; the summary goes to Liam Paninski,
+and the preprocessing choices to Shuqi Wang, asking whether any is worth
+rethinking for the whole brain (the camera rule, the firing-rate filter,
+the shift range and the single shift per session).
+
 ## Kept from Posani-Wang for now
 
 Liam wasn't asked about these. We keep Posani-Wang's choice, and revisit it if

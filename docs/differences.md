@@ -133,8 +133,14 @@ shuffled across trials.
   and 0.049), so the gap is not in our implementation. Fig. 2b's baseline is an
   average per task condition (Posani-Wang doesn't define the conditions), a
   stronger baseline than the null model of the Methods and the Posani-Wang
-  code (one average over all trials), which is the one the selection uses; why
-  their published RRR R² is higher than their trained model's is unknown.
+  code (one average over all trials), which is the one the selection uses.
+  Likely answer (2026-11-09): the 0.16 is the mean over the neurons that pass
+  the selection (delta R² > 0.015), not over all cortical neurons, although the
+  text says "across the whole population of neurons". On the `shuqi` dataset,
+  the mean RRR R² of the 4,381 selected cortical neurons is 0.158 (null model
+  0.105); on all cortical neurons, 0.067. Their PSTH baseline (0.09) can't be
+  checked the same way, since we don't compute it. On the `bwm` dataset, the
+  same measure gives 0.178 (null 0.117, 3,213 selected cortical neurons).
 - Why the cross-validation splits are stratified only by block and contrast
   (stated in Posani-Wang, not justified; see [pipeline.md](pipeline.md), the model).
 - Whether the lead/lag compromise of the single shift per session explains
