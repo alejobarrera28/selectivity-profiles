@@ -8,8 +8,11 @@ variable, z-scored across areas separately for each variable, and the cosine
 similarity of every pair of areas, on areas with at least 50 selected neurons.
 Unlike Posani-Wang, every brain area, not only cortex, and the matrix is
 clustered instead of compared with anatomical connectivity (which exists only
-for cortex). Each area is labelled with its major division of the brain
-(IBL's Cosmos mapping), to see whether the clusters follow anatomy.
+for cortex). Two versions (PROFILES): with each area's mean alpha (absolute
+selectivity, Posani-Wang's), and with each neuron's alpha as shares of its
+total (relative selectivity, ours), which compares what areas prefer without
+how selective they are overall. Each area is labelled with its major division
+of the brain (IBL's Cosmos mapping), to see whether the clusters follow anatomy.
 
 Run from the repo root: python -m analyses.area_similarity <dataset>
 Output: the figure and its values, in outputs/<dataset>/results/area_similarity/.
@@ -30,6 +33,14 @@ from pipeline.profiles import alpha
 # ---- Areas
 MIN_NEURONS_PER_AREA = 50  # Posani-Wang code (Fig2d.py): areas with fewer selected neurons are left out
 
+# ---- Profiles: name -> (relative, title). Absolute selectivity: each area's mean
+# alpha per variable (Posani-Wang). Relative selectivity: the mean share of each
+# neuron's alpha per variable (ours: the absolute one also reflects how selective
+# an area is overall, which dominates the similarity across the whole brain;
+# docs/beyond_cortex.md).
+PROFILES = {"absolute": (False, "Absolute selectivity: mean |α| per variable"),
+            "relative": (True, "Relative selectivity: mean share of each neuron's |α| per variable")}
+
 # ---- Clustering (ours: the standard hierarchical clustering of a similarity
 # matrix, distance = 1 - cosine similarity; average linkage needs no choice of
 # the number of clusters)
@@ -42,17 +53,26 @@ SEED = 0
 
 # ================================================================ similarity
 
-def area_profiles(table, beta):
+def area_profiles(table, beta, relative=False):
     """Mean alpha of each area with enough selected neurons, z-scored across areas per variable.
 
     `table` and `beta` are the profiles stage's output. Returns a DataFrame
     (areas x variables) and the number of selected neurons per area.
     Posani-Wang code (Fig2d.py), over all brain areas.
+
+    With `relative` (ours), each neuron's alpha is first divided by its sum over
+    the variables: the share of its selectivity that goes to each variable.
+    An area whose neurons are more selective to everything then no longer
+    stands out, so the similarity compares which variables areas prefer, not
+    how selective they are overall.
     """
     keep = table.selected.to_numpy()
     counts = table[keep].area.value_counts()
     areas = counts[counts >= MIN_NEURONS_PER_AREA].index
-    mean = pd.DataFrame(alpha(beta[keep]), columns=VARIABLES).groupby(table[keep].area.to_numpy()).mean()
+    selectivity = alpha(beta[keep])
+    if relative:
+        selectivity = selectivity / selectivity.sum(axis=1, keepdims=True)
+    mean = pd.DataFrame(selectivity, columns=VARIABLES).groupby(table[keep].area.to_numpy()).mean()
     mean = mean.loc[areas]
     zscored = (mean - mean.mean()) / mean.std(ddof=0)  # per variable (column), across areas
     return zscored, counts.loc[areas]
@@ -98,7 +118,7 @@ def within_minus_between(sim, division):
 
 # ================================================================ figure
 
-def plot_area_similarity(sim, tree, division, path):
+def plot_area_similarity(sim, tree, division, title, path):
     """The similarity matrix in the clustering's order, its dendrogram, and each area's division."""
     names = sorted(division.unique())
     colors = dict(zip(names, plt.get_cmap("tab10").colors))
@@ -124,10 +144,11 @@ def plot_area_similarity(sim, tree, division, path):
     ax.set_yticks(range(len(sim)), sim.index, fontsize=5)
     ax.yaxis.tick_right()
     colorbar = fig.colorbar(image, cax=fig.add_subplot(grid[1, 3]))
-    colorbar.set_label("cosine similarity of the areas' z-scored mean |α|")
+    colorbar.set_label("cosine similarity of the areas' z-scored profiles")
     handles = [plt.Rectangle((0, 0), 1, 1, color=colors[n]) for n in names]
     top.legend(handles, names, ncol=len(names), loc="lower center", bbox_to_anchor=(0.5, 1.0),
                fontsize=8, frameon=False, title="major division")
+    top.set_title(title, pad=60)
     fig.savefig(path, dpi=200, bbox_inches="tight")
     plt.close(fig)
 
@@ -143,21 +164,22 @@ if __name__ == "__main__":
     table = pd.read_csv(f"{out}/profiles/table.csv")
     beta = np.load(f"{out}/profiles/beta.npy")
 
-    # 2. Each area's z-scored mean selectivity, and the similarity of every pair of areas.
-    zscored, counts = area_profiles(table, beta)
-    sim = similarity(zscored)
+    # 2. For each version of the areas' profiles (PROFILES): the similarity of every pair
+    #    of areas, its clustering, and whether it is higher within a major division.
+    for name, (relative, title) in PROFILES.items():
+        zscored, counts = area_profiles(table, beta, relative)
+        sim = similarity(zscored)
+        order, tree = cluster_order(sim)
+        division = divisions(sim.index)
+        observed, p = within_minus_between(sim, division)
 
-    # 3. Clustering, and each area's major division.
-    order, tree = cluster_order(sim)
-    division = divisions(sim.index)
-    observed, p = within_minus_between(sim, division)
+        # ---- Save the values and the figure
+        sim.loc[order, order].to_csv(f"{results}/similarity_{name}.csv")
+        plot_area_similarity(sim.loc[order, order], tree, division, title, f"{results}/{name}.png")
+        print(f"{title}: mean similarity within a division minus between divisions {observed:.3f} "
+              f"(p = {p:.4f}, {N_PERMUTATIONS} shuffles of the divisions)")
 
-    # 4. Save the values and the figure.
-    sim.loc[order, order].to_csv(f"{results}/similarity.csv")
-    pd.DataFrame({"division": division, "selected_neurons": counts}).loc[order].to_csv(f"{results}/areas.csv")
-    plot_area_similarity(sim.loc[order, order], tree, division, f"{results}/area_similarity.png")
-    print(f"Area similarity: {len(sim)} areas with at least {MIN_NEURONS_PER_AREA} selected neurons, "
-          f"{counts.sum()} neurons.")
-    print(f"  areas per division: {division.value_counts().to_dict()}")
-    print(f"  mean similarity within a division minus between divisions: {observed:.3f} "
-          f"(p = {p:.4f}, {N_PERMUTATIONS} shuffles of the divisions)")
+    # 3. The areas, the same in every version.
+    pd.DataFrame({"division": division, "selected_neurons": counts}).to_csv(f"{results}/areas.csv")
+    print(f"{len(counts)} areas with at least {MIN_NEURONS_PER_AREA} selected neurons, "
+          f"{counts.sum()} neurons; per division: {division.value_counts().to_dict()}")

@@ -68,11 +68,42 @@ mean z 0.37-0.55) against those below on every variable (hippocampal
 formation, thalamus, isocortex: -0.31 to -0.55). That level correlates 0.86
 across areas with the median delta R² of their selected neurons, so it may
 reflect how well the model fits each area (or the noise floor of alpha)
-rather than a difference in what they encode. With each area's mean across
-variables removed first (the shape of the profile only), the division effect
-is smaller but still significant (0.126, p = 0.0001), and the clusters no
-longer split by division. Not in the analysis yet: an open question. In cortex, where Posani-Wang defined it, the level differs less
-between areas.
+rather than a difference in what they encode. In cortex, where Posani-Wang
+defined it, the level differs less between areas.
+
+Why the cosine doesn't remove the level: it ignores multiplying a vector, not
+adding to it. Before the z-score, an area that is more selective to everything
+has its mean alpha multiplied; after subtracting the average area, it is
+shifted (positive on every variable), which changes its direction. Without
+the z-score, every cosine is high (all alpha positive) and the variables with
+the largest alpha dominate, which is why Posani-Wang z-score.
+
+So the analysis has two versions (2026-11-09): absolute selectivity (each
+area's mean alpha, Posani-Wang's similarity, the committed first version) and
+relative selectivity (ours: each neuron's alpha divided by its sum over the
+variables, the share of its selectivity going to each variable, then averaged
+per area, z-scored and compared the same way). The level drops out per neuron,
+before the z-score. Relative: within a division minus between 0.133 (p =
+0.0001; 0.126 when instead each area's mean across its z-scored variables is
+subtracted). Its clusters cross the major divisions and look like sensorimotor
+systems; blocks read by eye from one clustering, with each block's mean
+z-scored share per variable:
+- visual-frontal-striatal (VISp, VISam, LP, MOs, ORBvl, ACAd, RSPv, MD, CP,
+  GPe): side 1.57, contrast 1.30;
+- limb (SSp-ll, SSp-ul, VPL, MOp, ZI, GRN, MDRN, PGRN, CUL4 5, COPY): wheel
+  1.35, choice 0.59;
+- orofacial (V, IRN, PARN, SSp-m, VPM, SPVO, VAL, RT, PO): lick 2.10;
+- auditory-vestibular (DCO, VCO, IC, NLL, SUV, LAV, CENT2, ANcr1, DN, IP, PB):
+  outcome 1.70 (the task's feedback sounds), block 1.13;
+- hippocampal (CA1, CA3, LSr, SSp-bfd, SSs, PIR, CS, PSV, VM): whisker 1.66
+  (perhaps arousal or locomotion, which whisking tracks).
+Not checked: robustness of the clusters (bootstrap over neurons, other
+linkages), and caveat B (the noise floor). Open question for Liam and Shuqi:
+which similarity for the whole brain; a principled alternative is pairwise
+decoding of the areas' neurons (Posani-Wang Fig. 2f without connectivity),
+which compares whole clouds of neurons, needs no reference set of areas, and
+is not inflated by noise since it is cross-validated. The relative version is
+a variant of ours; the z-score + cosine construction comes from Posani-Wang.
 
 What Posani-Wang says about the decoding (their repo has no code for it):
 the region of each neuron is decoded from its selectivity profile with a
