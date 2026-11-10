@@ -25,9 +25,65 @@ With Liam Paninski (Slack, 2026-11-08):
 - Data version: IBL's data as of a fixed date (`as_of` in `run.py`,
   2026-11-01), which can be moved later.
 - First analyses: decoding and basic clustering.
+- Shuqi Wang (Slack, 2026-11-09) agrees with all Brain Wide Map sessions and
+  good units only. Her suggestion for before the clustering of neurons: cluster
+  the matrix of similarity of the estimated selectivity between areas, to see
+  whether some structure emerges. In Posani-Wang (Fig. 2d) that similarity is
+  the cosine similarity of the areas' average selectivity profiles (the rows
+  of the area selectivity figure), for every pair of areas, compared there
+  with anatomical connectivity, which only exists for cortex. Their code
+  (`Fig2_globally_structured_brain/Fig2d.py`) takes each area's mean |alpha|
+  per variable, z-scores each variable across the areas (as in Fig. 2c), and
+  takes the cosine of those z-scored rows, on areas with at least 50 selected
+  neurons.
 - The 11 sessions that differ from Posani-Wang (differences.md, Open
   questions): report what we found to Shuqi Wang, and ask Olivier at IBL if
   it stays unresolved. They don't block the work.
+
+## Analyses: plan (2026-11-09)
+
+For the meeting with Liam on 2026-11-10, two analyses on `bwm`, both over
+the whole brain:
+1. Area similarity, clustered (the suggestion above):
+   `analyses/area_similarity.py`.
+2. Decoding each neuron's area from its selectivity profile (Posani-Wang
+   Fig. 2e). Liam's "decoding" (2026-11-08) refers to this.
+Then, later: Liam's "basic clustering", the clustering of neurons within each
+area (Posani-Wang Fig. 3). The analyses that depend on the cortical hierarchy
+or on anatomical connectivity (Fig. 2d, 2f, the timescales, the hierarchy
+plots of Fig. 3) are not done (Alejandro, 2026-11-09).
+
+Area similarity, first result on `bwm` (2026-11-09): 92 areas with at least
+50 selected neurons (16,920 neurons): hindbrain 21, isocortex 19, thalamus 15,
+cerebellum 13, midbrain 9, hippocampal formation 8, striatum and pallidum 5,
+hypothalamus 1, olfactory 1. Similarity is higher within a major division
+than between (difference 0.304, p = 0.0001 over 10,000 shuffles of the
+divisions). The top split of the clustering is forebrain (hippocampal
+formation, thalamus, most of isocortex) against hindbrain, cerebellum and
+midbrain. But that split is mostly each area's overall level of selectivity,
+not which variables it prefers: the z-score per variable leaves each area's
+mean across variables, and the cosine of the z-scored rows then groups areas
+that are above average on every variable (hindbrain, cerebellum, midbrain:
+mean z 0.37-0.55) against those below on every variable (hippocampal
+formation, thalamus, isocortex: -0.31 to -0.55). That level correlates 0.86
+across areas with the median delta R² of their selected neurons, so it may
+reflect how well the model fits each area (or the noise floor of alpha)
+rather than a difference in what they encode. With each area's mean across
+variables removed first (the shape of the profile only), the division effect
+is smaller but still significant (0.126, p = 0.0001), and the clusters no
+longer split by division. Not in the analysis yet: an open question. In cortex, where Posani-Wang defined it, the level differs less
+between areas.
+
+What Posani-Wang says about the decoding (their repo has no code for it):
+the region of each neuron is decoded from its selectivity profile with a
+linear SVM, one-vs-one multi-class, cross-validated; the null is the same
+decoding with the labels shuffled. Time-varying profiles (beta(t)): accuracy
+0.233 against a null of 0.033 +- 0.003; time-summed (alpha): 0.123 against
+0.018 +- 0.002; modules (Harris et al. 2019 groups of cortical areas): 0.422
+against 0.203 +- 0.010. The null of 0.033 is about 1/31, so probably the 31
+areas of Fig. 2c with classes balanced. Their general decoding settings
+(Decodanda): training fraction 0.8, 100 cross-validations; how they apply to
+this decoding of single neurons isn't stated.
 
 ## The session list (2026-11-08)
 
